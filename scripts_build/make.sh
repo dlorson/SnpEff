@@ -6,7 +6,7 @@ source `dirname $0`/config.sh
 # Build SnpEff
 #---
 
-cd $HOME/workspace/SnpEff/
+cd `dirname $0`/../
 
 mvn clean compile assembly:assembly
 
