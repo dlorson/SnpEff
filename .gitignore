@@ -1,2 +1,6 @@
 /data
 /target
+
+.metadata/
+.idea/
+snpEff.iml

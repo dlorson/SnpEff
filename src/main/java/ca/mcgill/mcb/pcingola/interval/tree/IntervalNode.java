@@ -1,14 +1,8 @@
 package ca.mcgill.mcb.pcingola.interval.tree;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.SortedMap;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 import ca.mcgill.mcb.pcingola.interval.Interval;
 import ca.mcgill.mcb.pcingola.interval.Marker;
@@ -35,31 +29,33 @@ public class IntervalNode implements Serializable, Iterable<Marker> {
 	}
 
 	public IntervalNode(Markers intervalList) {
-		intervals = new TreeMap<Marker, List<Marker>>();
 
-		SortedSet<Integer> endpoints = new TreeSet<Integer>();
+        intervals = new TreeMap<Marker, List<Marker>>();
 
-		for (Interval interval : intervalList) {
-			if (interval.isValid()) {
-				endpoints.add(interval.getStart());
-				endpoints.add(interval.getEnd());
-			} else System.err.println("WARNING: Ignoring interval " + interval);
-		}
+        List<Integer> endpoints = new ArrayList<Integer>();
 
-		if (endpoints.isEmpty()) {
-			center = 0;
-			return;
-		}
+        for (Interval interval : intervals) {
+            if (interval.isValid()) {
+                endpoints.add(interval.getStart());
+                endpoints.add(interval.getEnd());
+            } else System.err.println("WARNING: Ignoring interval " + interval);
+        }
 
-		int median = getMedian(endpoints);
-		center = median;
+        if (endpoints.size() == 0) {
+            center = 0;
+            return;
+        }
+
+
+        center = computeCenter(endpoints);
+
 
 		Markers left = new Markers();
 		Markers right = new Markers();
 
 		for (Marker interval : intervalList) {
-			if (interval.getEnd() < median) left.add(interval);
-			else if (interval.getStart() > median) right.add(interval);
+			if (interval.getEnd() < center) left.add(interval);
+			else if (interval.getStart() > center) right.add(interval);
 			else {
 				List<Marker> posting = intervals.get(interval);
 				if (posting == null) {
@@ -73,6 +69,38 @@ public class IntervalNode implements Serializable, Iterable<Marker> {
 		if (left.size() > 0) leftNode = new IntervalNode(left);
 		if (right.size() > 0) rightNode = new IntervalNode(right);
 	}
+
+
+    /**
+     * Compute an appropriate center for the given interval list
+     * @param intervals
+     */
+
+    int computeCenter(List<Integer> endpoints) {
+
+        // Compute the endpoint mean: far faster than the median (no sorting required)
+        // Also, the interval endpoints shouldn't be unique to obtain a reasonable estimate
+
+        long sum = 0;
+
+        for (Integer endpoint : endpoints) {
+            sum += endpoint;
+        }
+
+        int mean = Math.round((float)sum/(float)endpoints.size());
+
+        // the center must be one of the endpoints in order to construct the tree;
+        // so find the closest one to the mean
+
+        int closestEndpoint = 0;
+        for (Integer endpoint : endpoints) {
+            if (Math.abs(endpoint - mean) < Math.abs(closestEndpoint - mean)) {
+                closestEndpoint = start;
+            }
+        }
+
+        return closestEndpoint;
+    }
 
 	/**
 	 * Add all intervals to the 'allIntervals' list
@@ -98,7 +126,7 @@ public class IntervalNode implements Serializable, Iterable<Marker> {
 	 * @param set the set to look on
 	 * @return	  the median of the set, not interpolated
 	 */
-	private Integer getMedian(SortedSet<Integer> set) {
+	private Integer getMedian(List<Integer> set) {
 		int i = 0;
 		int middle = set.size() / 2;
 		for (Integer point : set) {
