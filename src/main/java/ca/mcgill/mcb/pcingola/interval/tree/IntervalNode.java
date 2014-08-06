@@ -34,7 +34,7 @@ public class IntervalNode implements Serializable, Iterable<Marker> {
 
         List<Integer> endpoints = new ArrayList<Integer>();
 
-        for (Interval interval : intervals) {
+        for (Interval interval : intervalList) {
             if (interval.isValid()) {
                 endpoints.add(interval.getStart());
                 endpoints.add(interval.getEnd());
@@ -95,7 +95,7 @@ public class IntervalNode implements Serializable, Iterable<Marker> {
         int closestEndpoint = 0;
         for (Integer endpoint : endpoints) {
             if (Math.abs(endpoint - mean) < Math.abs(closestEndpoint - mean)) {
-                closestEndpoint = start;
+                closestEndpoint = endpoint;
             }
         }
 
