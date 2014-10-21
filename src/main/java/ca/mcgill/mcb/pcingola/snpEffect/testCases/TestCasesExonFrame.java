@@ -10,15 +10,18 @@ import ca.mcgill.mcb.pcingola.snpEffect.Config;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.vcf.VcfEffect;
 import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
  * Test case for exon frames
- * 
+ *
  * @author pcingola
  */
 public class TestCasesExonFrame extends TestCase {
+
+	boolean verbose = false;
 
 	public TestCasesExonFrame() {
 		super();
@@ -28,23 +31,25 @@ public class TestCasesExonFrame extends TestCase {
 	 * Test database: Build, check and annotate
 	 */
 	public void test_01() {
+		Gpr.debug("Test");
 		//---
 		// Build database
 		//---
 		String genomeName = "testLukas";
-		String args[] = { "build", "-v", "-noLog", "-gff3", genomeName };
+		String args[] = { "build", "-noLog", "-gff3", genomeName };
 
 		SnpEff snpEff = new SnpEff(args);
+		snpEff.setVerbose(verbose);
+		snpEff.setSupressOutput(!verbose);
 		boolean ok = snpEff.run();
-
 		Assert.assertTrue(ok);
 
 		//---
-		// Load database and check some numbers		
+		// Load database and check some numbers
 		//---
 		String configFile = Config.DEFAULT_CONFIG_FILE;
 		Config config = new Config(genomeName, configFile);
-		System.out.println("Loading database");
+		if (verbose) System.out.println("Loading database");
 		SnpEffectPredictor snpEffectPredictor = config.loadSnpEffectPredictor();
 
 		// Find transcript (there is only one)
@@ -66,11 +71,13 @@ public class TestCasesExonFrame extends TestCase {
 		// Annotate
 		SnpEff cmd = new SnpEff(argsEff);
 		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setVerbose(verbose);
+		cmdEff.setSupressOutput(!verbose);
 		List<VcfEntry> vcfEntries = cmdEff.run(true);
 
 		// Analyze annotations
 		for (VcfEntry ve : vcfEntries) {
-			System.out.println(ve.toStringNoGt());
+			if (verbose) System.out.println(ve.toStringNoGt());
 
 			String expectedEffect = ve.getInfo("EXP_EFF");
 			String expectedAa = ve.getInfo("EXP_AA");
@@ -78,17 +85,19 @@ public class TestCasesExonFrame extends TestCase {
 
 			boolean found = false;
 			for (VcfEffect veff : ve.parseEffects()) {
-				System.out.println("\t" + veff);
-				String eff = veff.getEffect().toString();
+				String eff = veff.getEffectType().toString();
 
-				System.out.println("\t\tExpecing: '" + expectedEffect + "'\tFound: '" + eff + "'");
-				System.out.println("\t\tExpecing: '" + expectedAa + "'\tFound: '" + veff.getAa() + "'");
-				System.out.println("\t\tExpecing: '" + expectedCodon + "'\tFound: '" + veff.getCodon() + "'");
+				if (verbose) {
+					System.out.println("\t" + veff);
+					System.out.println("\t\tExpecing: '" + expectedEffect + "'\tFound: '" + eff + "'");
+					System.out.println("\t\tExpecing: '" + expectedAa + "'\tFound: '" + veff.getAa() + "'");
+					System.out.println("\t\tExpecing: '" + expectedCodon + "'\tFound: '" + veff.getCodon() + "'");
+				}
 
 				// Effect matches expected?
 				if (expectedEffect.equals(eff) //
-						&& ((veff.getAa() == null) || expectedAa.equals(veff.getAa())) // 
-						&& ((veff.getCodon() == null) || expectedCodon.equals(veff.getCodon())) // 
+						&& ((veff.getAa() == null) || expectedAa.equals(veff.getAa())) //
+						&& ((veff.getCodon() == null) || expectedCodon.equals(veff.getCodon())) //
 				) //
 					found = true;
 			}
@@ -97,4 +106,20 @@ public class TestCasesExonFrame extends TestCase {
 		}
 	}
 
+	/**
+	 * Build genome (no exceptions should be thrown)
+	 */
+	public void test_02() {
+		Gpr.debug("Test");
+
+		// Build database
+		String genomeName = "testMacuminata";
+		String args[] = { "build", "-noLog", genomeName };
+
+		//		SnpEff snpEff = new SnpEff(args);
+		//		snpEff.setVerbose(verbose);
+		//		snpEff.setSupressOutput(!verbose);
+		//		boolean ok = snpEff.run();
+		//		Assert.assertTrue(ok);
+	}
 }

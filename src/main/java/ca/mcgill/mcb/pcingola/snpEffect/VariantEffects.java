@@ -1,13 +1,13 @@
 package ca.mcgill.mcb.pcingola.snpEffect;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 import ca.mcgill.mcb.pcingola.interval.Marker;
 import ca.mcgill.mcb.pcingola.interval.Variant;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectImpact;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.ErrorWarningType;
 
 /**
@@ -19,18 +19,6 @@ public class VariantEffects implements Iterable<VariantEffect> {
 
 	Variant variant, variantRef;
 	List<VariantEffect> effects;
-
-	/**
-	 *  An empty list of results;
-	 * @return
-	 */
-	public static VariantEffects empty() {
-		return new VariantEffects();
-	}
-
-	public VariantEffects() {
-		effects = new ArrayList<VariantEffect>();
-	}
 
 	public VariantEffects(Variant variant) {
 		effects = new ArrayList<VariantEffect>();
@@ -46,18 +34,24 @@ public class VariantEffects implements Iterable<VariantEffect> {
 	/**
 	 * Add an effect
 	 */
-	public void add(Marker marker, EffectType effectType, String message) {
+	public void addEffect(Marker marker, EffectType effectType, EffectImpact effectImpact, String message) {
 		VariantEffect effNew = new VariantEffect(variant, variantRef);
-		effNew.set(marker, effectType, message);
+		effNew.set(marker, effectType, effectImpact, message);
 		effects.add(effNew);
 	}
 
-	public void add(VariantEffect variantEffect) {
-		effects.add(variantEffect);
+	/**
+	 * Add an effect
+	 */
+	public void addEffect(Marker marker, EffectType effectType, String message) {
+		addEffect(marker, effectType, effectType.effectImpact(), message);
 	}
 
-	public void add(VariantEffects variantEffects) {
-		effects.addAll(variantEffects.effects);
+	/**
+	 * Add an effect
+	 */
+	public void addEffect(VariantEffect variantEffect) {
+		effects.add(variantEffect);
 	}
 
 	public void addErrorWarning(ErrorWarningType errwarn) {
@@ -66,12 +60,22 @@ public class VariantEffects implements Iterable<VariantEffect> {
 
 	/**
 	 * Get (or create) the latest ChangeEffect
-	 * @return
 	 */
 	public VariantEffect get() {
 		if (effects.isEmpty()) effects.add(new VariantEffect(variant, variantRef));
 		return effects.get(effects.size() - 1);
+	}
 
+	public VariantEffect get(int index) {
+		return effects.get(index);
+	}
+
+	public Variant getVariant() {
+		return variant;
+	}
+
+	public Variant getVariantRef() {
+		return variantRef;
 	}
 
 	public boolean isEmpty() {
@@ -83,32 +87,11 @@ public class VariantEffects implements Iterable<VariantEffect> {
 		return effects.iterator();
 	}
 
-	public void setCodons(String codonsOld, String codonsNew, int codonNum, int codonIndex) {
-		EffectType newEffectType = get().setCodons(codonsOld, codonsNew, codonNum, codonIndex);
-
-		// Sometime a new effect arises from setting codons (e.g. FRAME_SHIFT disrupts a STOP codon)
-		if (newEffectType != null) {
-			VariantEffect newEff = get().clone();
-			newEff.setEffectType(newEffectType);
-			add(newEff);
-		}
-	}
-
-	public void setCodonsAround(String codonsLeft, String codonsRight) {
-		get().setCodonsAround(codonsLeft, codonsRight);
-
-	}
-
-	public void setDistance(int distance) {
-		get().setDistance(distance);
-	}
-
-	public void setEffectImpact(EffectImpact effectImpact) {
-		get().setEffectImpact(effectImpact);
-	}
-
-	public void setEffectType(EffectType effectType) {
-		get().setEffectType(effectType);
+	/**
+	 * Get (or create) the latest ChangeEffect
+	 */
+	public VariantEffect newVariantEffect() {
+		return new VariantEffect(variant, variantRef);
 	}
 
 	public void setMarker(Marker marker) {
@@ -117,6 +100,10 @@ public class VariantEffects implements Iterable<VariantEffect> {
 
 	public int size() {
 		return effects.size();
+	}
+
+	public void sort() {
+		Collections.sort(effects);
 	}
 
 	@Override

@@ -20,7 +20,6 @@ import ca.mcgill.mcb.pcingola.interval.Utr;
 import ca.mcgill.mcb.pcingola.interval.Variant;
 import ca.mcgill.mcb.pcingola.interval.tree.IntervalForest;
 import ca.mcgill.mcb.pcingola.serializer.MarkerSerializer;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.ErrorWarningType;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 
@@ -38,6 +37,18 @@ public class SnpEffectPredictor implements Serializable {
 	public static final int DEFAULT_UP_DOWN_LENGTH = 5000;
 	public static final int HUGE_DELETION_SIZE_THRESHOLD = 1000000; // Number of bases
 	public static final double HUGE_DELETION_RATIO_THRESHOLD = 0.01; // Percentage of bases
+
+	boolean useChromosomes = true;
+
+	int upDownStreamLength = DEFAULT_UP_DOWN_LENGTH;
+	int spliceSiteSize = SpliceSite.CORE_SPLICE_SITE_SIZE;
+	int spliceRegionExonSize = SpliceSite.SPLICE_REGION_EXON_SIZE;
+	int spliceRegionIntronMin = SpliceSite.SPLICE_REGION_INTRON_MIN;
+	int spliceRegionIntronMax = SpliceSite.SPLICE_REGION_INTRON_MAX;
+
+	Genome genome;
+	Markers markers; // All other markers are stored here (e.g. custom markers, intergenic, etc.)
+	IntervalForest intervalForest;
 
 	/**
 	 * Load predictor from a binary file
@@ -83,18 +94,6 @@ public class SnpEffectPredictor implements Serializable {
 		return snpEffectPredictor;
 	}
 
-	boolean useChromosomes = true;
-	int upDownStreamLength = DEFAULT_UP_DOWN_LENGTH;
-	int spliceSiteSize = SpliceSite.CORE_SPLICE_SITE_SIZE;
-	int spliceRegionExonSize = SpliceSite.SPLICE_REGION_EXON_SIZE;
-	int spliceRegionIntronMin = SpliceSite.SPLICE_REGION_INTRON_MIN;
-
-	int spliceRegionIntronMax = SpliceSite.SPLICE_REGION_INTRON_MAX;
-	Genome genome;
-	Markers markers; // All other markers are stored here (e.g. custom markers, intergenic, etc.)
-
-	IntervalForest intervalForest;
-
 	public SnpEffectPredictor(Genome genome) {
 		this.genome = genome;
 		markers = new Markers();
@@ -102,7 +101,6 @@ public class SnpEffectPredictor implements Serializable {
 
 	/**
 	 * Add a gene interval
-	 * @param gene
 	 */
 	public void add(Gene gene) {
 		genome.getGenes().add(gene);
@@ -113,8 +111,6 @@ public class SnpEffectPredictor implements Serializable {
 	 *
 	 * Note: Markers have to be added BEFORE building the interval trees.
 	 *       Interval trees are built the first time you call snpEffect(snp) method.
-	 *
-	 * @param marker
 	 */
 	public void add(Marker marker) {
 		markers.add(marker);
@@ -122,7 +118,6 @@ public class SnpEffectPredictor implements Serializable {
 
 	/**
 	 * Add a set of markers
-	 * @param markersToAdd
 	 */
 	public void addAll(Markers markersToAdd) {
 		for (Marker marker : markersToAdd)
@@ -150,6 +145,9 @@ public class SnpEffectPredictor implements Serializable {
 		//---
 		markers.add(createGenomicRegions());
 
+		// Mark canonical transcripts
+		canonical();
+
 		// Add all 'markers' to forest (includes custom intervals)
 		intervalForest.add(markers);
 
@@ -158,8 +156,15 @@ public class SnpEffectPredictor implements Serializable {
 	}
 
 	/**
+	 * Make sure all genes have canonical transcripts
+	 */
+	void canonical() {
+		for (Gene g : genome.getGenes())
+			g.canonical();
+	}
+
+	/**
 	 * Create (and add) up-down stream, splice sites, intergenic, etc
-	 * @return
 	 */
 	public Markers createGenomicRegions() {
 		Markers markers = new Markers();
@@ -181,8 +186,6 @@ public class SnpEffectPredictor implements Serializable {
 
 	/**
 	 * Obtain a gene interval
-	 * @param geneIntervalId
-	 * @return
 	 */
 	public Gene getGene(String geneIntervalId) {
 		return genome.getGenes().get(geneIntervalId);
@@ -212,14 +215,20 @@ public class SnpEffectPredictor implements Serializable {
 		return spliceRegionIntronMin;
 	}
 
+	public Transcript getTranscript(String trId) {
+		for (Gene g : genome.getGenes())
+			for (Transcript tr : g)
+				if (tr.getId().equals(trId)) return tr;
+
+		return null;
+	}
+
 	public int getUpDownStreamLength() {
 		return upDownStreamLength;
 	}
 
 	/**
 	 * Is the chromosome missing in this marker?
-	 * @param marker
-	 * @return
 	 */
 	boolean isChromosomeMissing(Marker marker) {
 		// Missing chromosome in marker?
@@ -475,10 +484,17 @@ public class SnpEffectPredictor implements Serializable {
 
 	/**
 	 * Remove all unverified transcripts
+	 *
+	 * @return true if ALL genes had ALL transcripts removed (i.e. something
+	 * went wrong, like in cases where no transcript was checked during the
+	 * building process)
 	 */
-	public void removeUnverified() {
+	public boolean removeUnverified() {
+		boolean allRemoved = true;
 		for (Gene g : genome.getGenes())
-			g.removeUnverified();
+			allRemoved &= g.removeUnverified();
+
+		return allRemoved;
 	}
 
 	/**
@@ -493,82 +509,23 @@ public class SnpEffectPredictor implements Serializable {
 	}
 
 	/**
+	 * Remove all transcripts that are NOT in the list
+	 * @return : Number of transcripts removed
+	 */
+	public int retainTranscriptsProtein() {
+		int total = 0;
+		for (Gene g : genome.getGenes())
+			total += g.keepTranscriptsProtein();
+		return total;
+	}
+
+	/**
 	 * Save predictor to a binary file (specified by the configuration)
 	 */
 	public void save(Config config) {
 		String databaseFile = config.getFileSnpEffectPredictor();
 		MarkerSerializer markerSerializer = new MarkerSerializer();
 		markerSerializer.save(databaseFile, this);
-	}
-
-	/**
-	 * Predict the effect of a seqChange
-	 * @param seqChange
-	 */
-	public VariantEffects variantEffect(Variant seqChange) {
-		return variantEffect(seqChange, null);
-	}
-
-	/**
-	 * Predict the effect of a seqChange
-	 * @param seqChange : Sequence change
-	 * @param seqChangeRef : Before analyzing results, we have to change markers using seqChangerRef to create a new reference 'on the fly'
-	 */
-	public VariantEffects variantEffect(Variant seqChange, Variant seqChangeRef) {
-		VariantEffects changeEffects = new VariantEffects(seqChange, seqChangeRef);
-
-		//---
-		// Chromosome missing?
-		//---
-		if (Config.get().isErrorOnMissingChromo() && isChromosomeMissing(seqChange)) {
-			changeEffects.addErrorWarning(ErrorWarningType.ERROR_CHROMOSOME_NOT_FOUND);
-			return changeEffects;
-		}
-
-		//---
-		// Check that this is not a huge deletion.
-		// Huge deletions would crash the rest of the algorithm, so we need to stop them here.
-		//---
-		if (seqChange.isDel() && (seqChange.size() > HUGE_DELETION_SIZE_THRESHOLD)) {
-			// Get chromosome
-			String chromoName = seqChange.getChromosomeName();
-			Chromosome chr = genome.getChromosome(chromoName);
-
-			if (chr.size() > 0) {
-				double ratio = seqChange.size() / ((double) chr.size());
-				if (ratio > HUGE_DELETION_RATIO_THRESHOLD) {
-					changeEffects.add(chr, EffectType.CHROMOSOME_LARGE_DELETION, "");
-					return changeEffects;
-				}
-			}
-		}
-
-		//---
-		// Query interval tree: Which intervals does seqChange intersect?
-		//---
-		Markers intersects = query(seqChange);
-
-		// Show all results
-		boolean hitChromo = false, hitSomething = false;
-		if (intersects.size() > 0) {
-			for (Marker marker : intersects) {
-				if (marker instanceof Chromosome) hitChromo = true; // Do we hit any chromosome?
-				else { // Analyze all markers
-					marker.seqChangeEffect(seqChange, changeEffects, seqChangeRef);
-					hitSomething = true;
-				}
-			}
-		}
-
-		// Any errors or intergenic (i.e. did not hit any gene)
-		if (!hitChromo) {
-			if (Config.get().isErrorChromoHit()) changeEffects.addErrorWarning(ErrorWarningType.ERROR_OUT_OF_CHROMOSOME_RANGE);
-		} else if (!hitSomething) {
-			if (Config.get().isOnlyRegulation()) changeEffects.setEffectType(EffectType.NONE);
-			else changeEffects.setEffectType(EffectType.INTERGENIC);
-		}
-
-		return changeEffects;
 	}
 
 	public void setSpliceRegionExonSize(int spliceRegionExonSize) {
@@ -610,4 +567,72 @@ public class SnpEffectPredictor implements Serializable {
 		return sb.toString();
 	}
 
+	/**
+	 * Predict the effect of a variant
+	 */
+	public VariantEffects variantEffect(Variant variant) {
+		return variantEffect(variant, null);
+	}
+
+	/**
+	 * Predict the effect of a variant
+	 * @param variant : Sequence change
+	 * @param variantRef : Before analyzing results, we have to change markers using variantrRef to create a new reference 'on the fly'
+	 */
+	public VariantEffects variantEffect(Variant variant, Variant variantRef) {
+		VariantEffects variantEffects = new VariantEffects(variant, variantRef);
+
+		//---
+		// Chromosome missing?
+		//---
+		if (Config.get().isErrorOnMissingChromo() && isChromosomeMissing(variant)) {
+			variantEffects.addErrorWarning(ErrorWarningType.ERROR_CHROMOSOME_NOT_FOUND);
+			return variantEffects;
+		}
+
+		//---
+		// Check that this is not a huge deletion.
+		// Huge deletions would crash the rest of the algorithm, so we need to stop them here.
+		//---
+		// Get chromosome
+		if (variant.isDel()) {
+			String chromoName = variant.getChromosomeName();
+			Chromosome chr = genome.getChromosome(chromoName);
+			double ratio = (chr.size() > 0 ? variant.size() / ((double) chr.size()) : 0);
+			if (variant.size() > HUGE_DELETION_SIZE_THRESHOLD || ratio > HUGE_DELETION_RATIO_THRESHOLD) {
+				variantEffects.addEffect(chr, EffectType.CHROMOSOME_LARGE_DELETION, "");
+				return variantEffects;
+			}
+		}
+
+		//---
+		// Query interval tree: Which intervals does variant intersect?
+		//---
+		Markers intersects = query(variant);
+
+		// Show all results
+		boolean hitChromo = false, hitSomething = false;
+		if (intersects.size() > 0) {
+			for (Marker marker : intersects) {
+				if (marker instanceof Chromosome) hitChromo = true; // Do we hit any chromosome?
+				else { // Analyze all markers
+					marker.variantEffect(variant, variantRef, variantEffects);
+					hitSomething = true;
+				}
+			}
+		}
+
+		// Any errors or intergenic (i.e. did not hit any gene)
+		if (!hitChromo) {
+			if (Config.get().isErrorChromoHit()) variantEffects.addErrorWarning(ErrorWarningType.ERROR_OUT_OF_CHROMOSOME_RANGE);
+		} else if (!hitSomething) {
+			if (Config.get().isOnlyRegulation()) {
+				variantEffects.addEffect(null, EffectType.NONE, "");
+			} else {
+				variantEffects.addEffect(null, EffectType.INTERGENIC, "");
+			}
+		}
+
+		return variantEffects;
+	}
 }

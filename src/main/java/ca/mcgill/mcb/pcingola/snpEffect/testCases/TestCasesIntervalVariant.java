@@ -11,20 +11,22 @@ import ca.mcgill.mcb.pcingola.interval.Genome;
 import ca.mcgill.mcb.pcingola.interval.Intron;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
- * Test random Interval SeqChanges (e.g. when reading a BED file 
- * 
+ * Test random Interval SeqChanges (e.g. when reading a BED file
+ *
  * @author pcingola
  */
 public class TestCasesIntervalVariant extends TestCase {
+
+	public static int N = 1000;
 
 	boolean debug = false;
 
@@ -82,7 +84,7 @@ public class TestCasesIntervalVariant extends TestCase {
 	}
 
 	public void test_01() {
-		int N = 1000;
+		Gpr.debug("Test");
 
 		// Test N times
 		//	- Create a random gene transcript, exons
@@ -106,23 +108,23 @@ public class TestCasesIntervalVariant extends TestCase {
 				int end = Math.min(pos + intLen, chromosome.getEnd());
 
 				// Create a SeqChange
-				Variant seqChange = new Variant(chromosome, start, end, "");
+				Variant variant = new Variant(chromosome, start, end, "");
 
 				// Sanity checks
-				Assert.assertEquals(true, seqChange.isInterval()); // Is it an interval?
+				Assert.assertEquals(true, variant.isInterval()); // Is it an interval?
 
 				//---
 				// Expected Effect
 				//---
 				String expectedEffect = null;
-				if (transcript.intersects(seqChange)) {
+				if (transcript.intersects(variant)) {
 					// Does it intersect any exon?
 					for (Exon ex : transcript)
-						if (ex.intersects(seqChange)) expectedEffect = "EXON";
+						if (ex.intersects(variant)) expectedEffect = "EXON";
 
 					for (Intron intron : transcript.introns())
-						if (intron.intersects(seqChange)) expectedEffect = "INTRON";
-				} else if (gene.intersects(seqChange)) {
+						if (intron.intersects(variant)) expectedEffect = "INTRON";
+				} else if (gene.intersects(variant)) {
 					// Gene intersects but transcript doesn't?
 					if (expectedEffect == null) expectedEffect = "INTRAGENIC";
 				} else expectedEffect = "INTERGENIC";
@@ -131,15 +133,15 @@ public class TestCasesIntervalVariant extends TestCase {
 				// Calculate effects
 				//---
 				// Copy only some effect (other effects are not tested)
-				VariantEffects effectsAll = snpEffectPredictor.variantEffect(seqChange);
-				VariantEffects effects = new VariantEffects();
+				VariantEffects effectsAll = snpEffectPredictor.variantEffect(variant);
+				VariantEffects effects = new VariantEffects(variant);
 				for (VariantEffect eff : effectsAll) {
 					boolean copy = true;
 
 					if (eff.getEffectType() == EffectType.SPLICE_SITE_ACCEPTOR) copy = false;
 					if (eff.getEffectType() == EffectType.SPLICE_SITE_DONOR) copy = false;
 
-					if (copy) effects.add(eff);
+					if (copy) effects.addEffect(eff.getMarker(), eff.getEffectType(), "");
 				}
 
 				// There should be only one effect in most cases
@@ -163,11 +165,11 @@ public class TestCasesIntervalVariant extends TestCase {
 				}
 
 				if (debug || !isExpectedOK) //
-					System.out.println("SeqChange       : " + seqChange //
+					System.out.println("SeqChange       : " + variant //
 							+ "\nExpected Effect :\t" + expectedEffect //
 							+ "\nEffects         :\t" + effSb //
 							+ "\n--------------------------------------------------------------\n" //
-					);
+							);
 				Assert.assertEquals(true, isExpectedOK);
 			}
 		}

@@ -1,5 +1,6 @@
 package ca.mcgill.mcb.pcingola.snpEffect.commandLine;
 
+import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 
@@ -19,6 +20,23 @@ public class SnpEffCmdDownload extends SnpEff {
 
 	public SnpEffCmdDownload() {
 		super();
+	}
+
+	void downloadAndInstall(URL url, String localFile) {
+		// Download and UnZIP
+		Download download = new Download();
+		download.setVerbose(verbose);
+		download.setDebug(debug);
+		download.setUpdate(update);
+		if (download.download(url, localFile)) {
+			if (download.unzip(localFile, config.getDirMain(), config.getDirData())) {
+				if (verbose) Timer.showStdErr("Unzip: OK");
+				if ((new File(localFile)).delete()) {
+					if (verbose) Timer.showStdErr("Deleted local file '" + localFile + "'");
+				}
+			}
+		}
+
 	}
 
 	/**
@@ -63,16 +81,8 @@ public class SnpEffCmdDownload extends SnpEff {
 		if (verbose) Timer.showStdErr("Downloading database for '" + genomeVer + "'");
 
 		URL url = config.downloadUrl(genomeVer);
-		String localFile = Download.urlBaseName(url.toString());
-
-		// Download and UnZIP
-		Download download = new Download();
-		download.setVerbose(verbose);
-		download.setDebug(debug);
-		download.setUpdate(update);
-		if (download.download(url, localFile)) {
-			if (download.unzip(localFile, config.getDirMain(), config.getDirData()) && verbose) Timer.showStdErr("Unzip: OK");
-		}
+		String localFile = System.getProperty("java.io.tmpdir") + "/" + Download.urlBaseName(url.toString());
+		downloadAndInstall(url, localFile);
 
 		if (verbose) Timer.showStdErr("Done");
 		return true;
@@ -110,16 +120,8 @@ public class SnpEffCmdDownload extends SnpEff {
 		} catch (MalformedURLException e) {
 			throw new RuntimeException(e);
 		}
-		String localFile = Gpr.baseName(url.toString());
-
-		// Download and unzip
-		Download download = new Download();
-		download.setVerbose(verbose);
-		download.setDebug(debug);
-		download.setUpdate(update);
-		if (download.download(url, localFile)) {
-			if (download.unzip(localFile, config.getDirMain(), config.getDirData()) && verbose) Timer.showStdErr("Unzip: OK");
-		}
+		String localFile = System.getProperty("java.io.tmpdir") + "/" + Gpr.baseName(url.toString());
+		downloadAndInstall(url, localFile); // Download and unzip
 
 		if (verbose) Timer.showStdErr("Done");
 		return true;
@@ -127,7 +129,6 @@ public class SnpEffCmdDownload extends SnpEff {
 
 	/**
 	 * Show 'usage;' message and exit with an error code '-1'
-	 * @param message
 	 */
 	@Override
 	public void usage(String message) {

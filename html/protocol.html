@@ -61,7 +61,7 @@
 <header class="jumbotron subhead" id="overview">
   <div class="container">
     <h1>SnpEff</h1>
-    <p class="lead">Usage (protocol) examples.</p>
+    <p class="lead">Usage examples.</p>
   </div>
 </header>
 
@@ -74,9 +74,12 @@
       <div class="span3 bs-docs-sidebar">
         <ul class="nav nav-list bs-docs-sidenav">
           <li><a href="#intro"><i class="icon-chevron-right"></i> Materials</a></li>
-          <li><a href="#ex1"><i class="icon-chevron-right"></i> Example 1: Coding variants</a></li>
-          <li><a href="#int"><i class="icon-chevron-right"></i> Software Integration </a></li>
-          <li><a href="#ex2"><i class="icon-chevron-right"></i> Example 2: Non-Coding variants</a></li>
+          <li><a href="#exCoding"><i class="icon-chevron-right"></i> Example 1: Coding variants</a></li>
+          <li><a href="#exIntegr"><i class="icon-chevron-right"></i> Example 2:Software Integration </a></li>
+          <li><a href="#exNonCoding"><i class="icon-chevron-right"></i> Example 3: Non-Coding variants</a></li>
+          <li><a href="#exSeqData"><i class="icon-chevron-right"></i> Example 4: Sequencing data analysis</a></li>
+          <li><a href="#exFilter"><i class="icon-chevron-right"></i> Example 5: Filter variants (dbSnp)</a></li>
+          <li><a href="#exCustom"><i class="icon-chevron-right"></i> Example 6: Custom annotations</a></li>
         </ul>
       </div>
       <div class="span9">
@@ -86,7 +89,7 @@
         ================================================== -->
         <section id="intro">
           <div class="page-header">
-            <h1>1. Materials</h1>
+            <h1>Materials</h1>
           </div>
 				<p class="lead">
 				In this protocol we show how to analyze genomic variants using the SnpEff pipeline.
@@ -97,7 +100,7 @@
 					<li> a computer running a Unix operating system (Linux, OS.X), 
 					<li> at least 4GB of RAM
 					<li> at least 1Gb of free disk space, 
-					<li> Java version 1.6 or higher installed, and 
+					<li> Java version 1.7 or higher installed, and 
 					<li> a reasonably fast internet connection. 
 				</ul>
 				Users of Windows computers can install CygWin, a free Linux-like environment for Windows, although the precise commands listed in the protocol may need to adapted.
@@ -143,11 +146,11 @@ java -jar snpEff.jar databases
 				</p>
         </section>
 
-        <!-- Example 1
+        <!-- Example : Coding
         ================================================== -->
-        <section id="ex1">
+        <section id="exCoding">
           <div class="page-header">
-            <h1>2. Example: Coding variants</h1>
+            <h1>Example 1: Coding variants</h1>
           </div>
 				<p class="lead"> We show how to use SnpEff & SnpSitf to annotate, prioritize and filter coding variants.<p>
 
@@ -487,11 +490,11 @@ cat protocols/ex1.eff.cc.clinvar.vcf \
 				<br>
 				</p>
 
-        <!-- Integration
+        <!-- Example: Integration
         ================================================== -->
-        <section id="int">
+        <section id="exIntegr">
           <div class="page-header">
-            <h1>2. Software Integration (Optional) </h1>
+            <h1>Example 2: Software Integration (GATK &amp; Galaxy) </h1>
           </div>
 				<br>
 				Software Integration (Optional): Sequence analysis software is often run in high performance computers combining several programs into processing pipelines. 
@@ -554,11 +557,11 @@ java -Xmx4g -jar $HOME/tools/gatk/GenomeAnalysisTK.jar \
 			</p>
         </section>
 
-        <!-- Example 2
+        <!-- Example: Non-Coding
         ================================================== -->
-        <section id="ex2">
+        <section id="exNonCoding">
           <div class="page-header">
-            <h1>3. Example: Non-Coding variants</h1>
+            <h1>Example 3: Non-Coding variants</h1>
           </div>
 				<p class="lead"> We show how to use SnpEff & SnpSitf to annotate, prioritize and filter non-coding variants.<p>
 
@@ -649,6 +652,230 @@ cat protocols/ex2.eff.cons.vcf \
 				The principles illustrated in our example for a small set of SNVs can be applied to millions of variants from whole genome sequencing experiments. Similarly, although we filtered the SNVs using "custom" ChIP-seq data that provided in the original study, regulatory information from public Encode or Epigenome Roadmap datasets could be used in a first line investigation before generating our own Chip-seq or RNA-seq data using disease-relevant cells and tissues.
 				<br>
 				<br>
+        </section>
+
+        <!-- Example: Sequencing data analysis
+        ================================================== -->
+        <section id="exSeqData">
+          <div class="page-header">
+            <h1>Example 4: Sequencing data analysis</h1>
+          </div>
+				<p class="lead"> Here we show an example on how to get from Sequencing data to an annotated variants file </p>
+
+				<p><h3>Sequencing data example</h3>
+				<i class="icon-warning-sign"></i> This is an extremely simplified version on how to analyze the data from scratch
+				This is not meant to be a tutorial on sequencing analysis as it would be way beyond the scope of this handbook.
+				<br>
+				Let's assume you have sequence data in FASTQ format (file "s.fastq") and your reference genome is dm5.34 (fly genome)
+<pre>
+# Download the genome, uncompress and rename file
+wget ftp://ftp.flybase.net/genomes/Drosophila_melanogaster/dmel_r5.34_FB2011_02/fasta/dmel-all-chromosome-r5.34.fasta.gz
+gunzip dmel-all-chromosome-r5.34.fasta.gz
+mv dmel-all-chromosome-r5.34.fasta dm5.34.fasta
+
+# Create a genome index (we assume you installed BWA http://bio-bwa.sourceforge.net/)
+bwa index -bwtsw dm5.34.fasta
+
+# Map sequences to the genome: Create SAI file
+bwa aln -bwtsw dm5.34.fasta s.fastq > s.sai
+
+# Map sequences to the genome: Create SAM file
+bwa samse dm5.34.fasta s.sai s.fastq > s.sam
+
+# Create BAM file (we assume you installed SamTools http://samtools.sourceforge.net/)
+samtools view -S -b s.sam > s.bam
+
+# Sort BAM file (will create s_sort.bam)
+samtools sort s.bam s_sort
+
+# Create VCF file (BcfTools is part of samtools distribution)
+samtools mpileup -uf dm5.34.fasta s_sort.bam | bcftools view -vcg - > s.vcf
+
+# Analyze variants using snpEff
+java -Xmx4g -jar snpEff.jar dm5.34 s.vcf > s.eff.vcf
+</pre>
+
+				This highly simplified sequencing data analysis pipeline, has these basic steps
+				<ol>
+					<li> Index the reference genome (bwa)
+					<li> Map reads to reference genome (bwa)
+					<li> Call variants (bcftools)
+					<li> Annotate variants (SnpEff)
+				</ol>
+				</p>
+        </section>
+
+        <!-- Example: Filter out SNPs from dbSnp
+        ================================================== -->
+        <section id="exFilter">
+          <div class="page-header">
+			<h1>Example 5: Filter out variants (dbSnp) </h1>
+          </div>
+				<p class="lead"> Here we show an example on how to get from Sequencing data to an annotated variants file </p>
+
+				These are slightly more advanced examples. 
+				Here we'll try to show how to perform specific tasks.
+
+				If you want to filter out SNPs from dbSnp, you can do it using SnpSift.
+				You can download SnpSift from the "Downloads" page.
+				<p>
+				You can download the file for this example <a class="body" href="examples/file.vcf">here</a>.<br>
+				Here is how to do it:
+				<p>
+				<ol>
+					<li> Annotate ID fields using <code>SnpSif annotate</code> and DbSnp<br>
+						<i class="icon-hand-right"></i> We annotate using dbSnp before using SnpEff in order to 
+								have 'known' and 'unknown' statistics in SnpEff's summary page.
+								Those stats are based on the presence of an ID field. If the ID 
+								is non-empty, then it is assumed to be a 'known variant'.
+<pre>
+# Annotate ID field using dbSnp
+# Note: SnpSift will automatically download and uncompress dbSnp database if not locally available.
+java -jar SnpSif.jar annotate -dbsnp file.vcf > file.dbSnp.vcf
+</pre>
+
+					<li> Annotate using SnpEff:
+<pre>
+java -Xmx4g -jar snpEff.jar eff -v GRCh37.75 file.dbSnp.vcf > file.eff.vcf
+</pre>
+
+					<li> Filter out variants that have a non-empty ID field. 
+					These variants are the ones that are NOT in dbSnp, since we annotated the ID field using rs-numbers from dbSnp in step 1.
+<pre>
+java -jar SnpSift.jar filter -f file.eff.vcf "! exists ID" > file.eff.not_in_dbSnp.vcf
+</pre>
+					<i class="icon-hand-right"></i>The expression using to filter the file is "! exists ID".
+					This means that the ID field does not exists (i.e. the value is empty) which is represented as a dot (".") in a VCF file.
+				</ol>
+				
+				<b>Pipes</b>
+				Obviously you can perform the three previous commands, pipeling the out from one command to the next, thus avoiding the creation of intermediate files (for very large projects, this can be a significant amount of time).
+				<br>
+				<br>
+				<i class="icon-hand-right"></i>In SnpEff &amp; SnpSift the STDIN is denoted by file name <code>"-"</code>
+				<br>
+				<br>
+				So the previous commands would be
+<pre>
+java -jar SnpSif.jar annotate -dbsnp file.vcf \
+	| java -Xmx4g -jar snpEff.jar eff -v GRCh37.75 - \
+	| java -jar SnpSift.jar filter "! exists ID" \
+	> file.eff.not_in_dbSnp.vcf
+</pre>
+
+				Here is an example of some entries in the annotated output file. 
+				You can see the 'EFF' field was added, predicting STOP_GAINED protein changes:
+
+<pre>
+$ cat demo.1kg.snpeff.vcf | grep STOP_
+1    889455    .    G    A    100.0    PASS    ...;EFF=STOP_GAINED(HIGH|NONSENSE|Cag/Tag|Q236*...
+1    897062    .    C    T    100.0    PASS    ...;EFF=STOP_GAINED(HIGH|NONSENSE|Cag/Tag|Q141*...
+1    900375    .    G    A    100.0    PASS    ...;EFF=STOP_GAINED(HIGH|NONSENSE|tGg/tAg|W578*...
+</pre>
+				Note: The real output was edited for readibility reasons.
+				</p>
+
+        </section>
+				
+
+        <!-- Example: Custom
+        ================================================== -->
+        <section id="exCustom">
+          <div class="page-header">
+			<h1>Example 6: Custom annotations</h1>
+          </div>
+				<p class="lead"> SnpEff can annotate using user specified (custom) genomic intervals, allowing you to add any kind of annotations you want. </p>
+
+				
+				In this example, we are analyzing using a specific version of the Yeast genome (we will assume that the database is not avialable, just to show a more complete example).
+				We also want to add annotaions of genomic regions known as 'ARS', which are defined in a GFF file.
+				This turns out to be quite easy, thanks to SnpEff's "custom intervals" feature. 
+				SnpEff allows you to add "custom" annotations from intervals in several formats: TXT, BED, BigBed, VCF, GFF.
+				<br>
+				<br>
+				So, for thie example, we need to:
+				<ul>
+					<li> Build the database: For the sake of this example, we are assuming that SnpEff doesn't have this database (which is not true in most real life situations).
+					<li> Create a file with the features we want to analyze (ARS)
+					<li> Annotate using the ARS features
+				</ul>
+
+				<h3> Step 1: Build database.</h3>
+				Once more, this is done for the sake of the example, in real life Yeast databases are avaialble and you don't need to build the database yourself.
+
+<pre>
+#---
+# Download data
+#---
+$ cd ~/snpEff
+$ mkdir data/sacCer
+$ cd data/sacCer
+$ wget http://downloads.yeastgenome.org/curation/chromosomal_feature/saccharomyces_cerevisiae.gff
+$ mv saccharomyces_cerevisiae.gff genes.gff
+</pre>
+
+				Now that we've downloaded the reference genome, we can build the database
+
+<pre>
+#---
+# Build
+#---
+$ cd ../..
+
+# Add entry to config file
+$ echo "sacCer.genome : Yeast" >> snpEff.config 
+
+# Build database
+$ java -Xmx1G -jar snpEff.jar build -gff3 sacCer
+</pre>
+				
+				<h3> Step 2: Create custom annotations file.</h3>
+				We need a file that has our features of interest (in this case, the "ARS" features).
+				Since those features ara available in the original GFF (saccharomyces_cerevisiae.gff) file, we can filter the file to create our "custom" annotations file.
+
+<pre>
+#---
+# Create a features file
+#---
+
+# GFF files have both genomic records and sequences, we need to know 
+# where the 'records' section ends (it is delimited by a "##FASTA" line)
+$ grep -n "^#" data/sacCer/genes.gff | tail -n 1
+22994:##FASTA
+
+# Note that I'm cutting the INFO column (only for readability reasons)
+$ head -n 22994 data/sacCer/genes.gff \
+      | grep -v "^#" \
+      | grep ARS  \
+      | cut -f 1 -d ";" \
+      > sacCer_ARS_features.gff
+</pre>
+
+				So now we have a custom file ready to be used.
+
+				<h3> Step 3: Annotate.</h3>
+				We built the database and we have the ARS features file, so we are ready to annotate:
+<pre>
+#---
+# Features annotations example
+#---
+
+# Create a fake VCF file (one line), this is just an example to show that it works
+$ echo -e "chrI\t700\t.\tA\tT\t.\t.\t." > my.vcf
+
+$ java -jar snpEff.jar -interval sacCer_features.gff sacCer my.vcf > my.eff.vcf
+</pre>
+
+				If we take a look at the results, we can see that the "ARS" feature is annotates (see last line)
+<pre>
+$ cat my.eff.vcf | grep -v "^#" | cut -f 8 | tr ",;" "\n\n"
+EFF=missense_variant(LOW|MISSENSE|Cca/Tca|p.Pro55Ser/c.163A>T|84|YAL068W-A|protein_coding|CODING|YAL068W-A_mRNA|1|1|WARNING_REF_DOES_NOT_MATCH_GENOME)
+upstream_gene_variant(MODIFIER||1780||75|YAL067W-A|protein_coding|CODING|YAL067W-A_mRNA||1)
+downstream_gene_variant(MODIFIER||1107||120|YAL068C|protein_coding|CODING|YAL068C_mRNA||1)
+downstream_gene_variant(MODIFIER||51||104|YAL069W|protein_coding|CODING|YAL069W_mRNA||1)
+custom[sacCer_features](MODIFIER||||||ARS102||||1)
+</pre>
+        </section>
       </div>
     </div>
 
@@ -659,7 +886,7 @@ cat protocols/ex2.eff.cons.vcf \
     <!-- Footer
     ================================================== -->
       <footer>
-        <p class="text-center">&copy; <a class="body" href="http://www.linkedin.com/in/pablocingolani">Pablo Cingolani 2013</a></p>
+        <p class="text-center">&copy; <a class="body" href="http://www.linkedin.com/in/pablocingolani">Pablo Cingolani 2014</a></p>
       </footer>
 
 

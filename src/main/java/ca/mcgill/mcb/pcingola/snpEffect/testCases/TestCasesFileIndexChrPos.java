@@ -15,7 +15,7 @@ import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
  * Test cases for file index (chr:pos index on files)
- * 
+ *
  * @author pcingola
  */
 public class TestCasesFileIndexChrPos extends TestCase {
@@ -26,7 +26,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	void readLinesCheck(String vcf, int numTests) {
 		Random random = new Random(20130218);
 
-		System.out.println("Opening file '" + vcf + "'");
+		if (verbose) System.out.println("Opening file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.open();
@@ -60,7 +60,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 
 			Gpr.showMark(i, 1);
 		}
-
+		System.err.println("");
 	}
 
 	/**
@@ -68,6 +68,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_00_long_file() throws IOException {
+		Gpr.debug("Test");
 		readLinesCheck("tests/test.chr1.vcf", 1000);
 	}
 
@@ -76,6 +77,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_00_short_file() throws IOException {
+		Gpr.debug("Test");
 		readLinesCheck("tests/test_filter_transcripts_001.ori.vcf", 1000);
 	}
 
@@ -84,16 +86,17 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_01() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.open();
 		idx.index();
 
 		long pos = idx.getStart("1");
-		System.out.println("\tChr 1 start: " + pos);
+		if (verbose) System.out.println("\tChr 1 start: " + pos);
 		Assert.assertEquals(82703, pos);
 
 		idx.close();
@@ -104,10 +107,11 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_02() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 		String line = "1	861275	.	C	T	764.18	PASS	AC=1;AF=0.00061;AN=1644;DS;set=Intersection";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.open();
@@ -115,7 +119,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 
 		long pos = idx.getStart("1");
 		LineAndPos lp = idx.getLine(pos);
-		System.out.println("\tChr 1 start: " + pos + "\tLine: '" + lp.line + "'");
+		if (verbose) System.out.println("\tChr 1 start: " + pos + "\tLine: '" + lp.line + "'");
 		Assert.assertEquals(line, lp.line);
 		idx.close();
 	}
@@ -125,9 +129,10 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_03() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.open();
@@ -151,16 +156,17 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_04() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
 		idx.open();
 		idx.index();
 
-		// We'll try to find this chr:pos = 1:1019717 
+		// We'll try to find this chr:pos = 1:1019717
 		int chrPos = 1019717 - 1; // Zero based coordinate of VCF line
 
 		// Find chr:pos
@@ -178,16 +184,17 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_05() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
 		idx.open();
 		idx.index();
 
-		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717) 
+		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717)
 		int chrPosReal = 1019717 - 1; // Zero based coordinate of VCF line
 		int chrPos = chrPosReal - 1; // Zero based coordinate of VCF line
 
@@ -205,16 +212,17 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_06() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
 		idx.open();
 		idx.index();
 
-		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717) 
+		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717)
 		int chrPosReal = 1019718 - 1; // Zero based coordinate of VCF line
 		int chrPos = chrPosReal + 1; // Zero based coordinate of VCF line
 
@@ -232,16 +240,17 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_07() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
 		idx.open();
 		idx.index();
 
-		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717) 
+		// We'll try to find this chr:pos = 1:1019716 (the coordinate that is in the VCF file is 1:1019717)
 		int chrPosReal = 865488 - 1; // Zero based coordinate of VCF line
 		int chrPos = 861316 - 1; // Zero based coordinate of VCF line
 
@@ -255,11 +264,12 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	}
 
 	public void test_10() throws IOException {
+		Gpr.debug("Test");
 		String vcfFileName = "tests/test.chr1.vcf";
 		Random random = new Random(20130216);
 
 		// Index file
-		System.out.println("Indexing file '" + vcfFileName + "'");
+		if (verbose) if (verbose) System.out.println("Indexing file '" + vcfFileName + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcfFileName);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -287,12 +297,13 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_11() throws IOException {
+		Gpr.debug("Test");
 		String vcfFileName = "tests/test.chr1.vcf";
 
 		Random random = new Random(20130217);
 
 		// Index file
-		System.out.println("Indexing file '" + vcfFileName + "'");
+		if (verbose) if (verbose) System.out.println("Indexing file '" + vcfFileName + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcfFileName);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -308,7 +319,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 
 			// Only perform some tests otherwise it's too long
 			if (random.nextInt(1000) < 2) {
-				System.out.println("\tFind: " + chrPosPrev + " - " + chrPos);
+				if (verbose) System.out.println("\tFind: " + chrPosPrev + " - " + chrPos);
 
 				// Find all positions from previous to current
 				int step = Math.max((chrPos - chrPosPrev) / 10, 1);
@@ -333,9 +344,10 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_20() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -354,9 +366,10 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_21() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -375,9 +388,10 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_22() throws IOException {
+		Gpr.debug("Test");
 		String vcf = "tests/test.chr1.vcf";
 
-		System.out.println("Indexing file '" + vcf + "'");
+		if (verbose) System.out.println("Indexing file '" + vcf + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcf);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -396,12 +410,13 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_23() throws IOException {
+		Gpr.debug("Test");
 		String vcfFileName = "tests/test.chr1.vcf";
 		int MAX_TEST = 1000;
 		Random random = new Random(20130217);
 
 		// Index file
-		System.out.println("Indexing file '" + vcfFileName + "'");
+		if (verbose) System.out.println("Indexing file '" + vcfFileName + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcfFileName);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -425,11 +440,11 @@ public class TestCasesFileIndexChrPos extends TestCase {
 		maxPos += 1000;
 
 		// Dump random parts of the file
-		System.out.println("\tDump test (short): ");
+		if (verbose) System.out.println("\tDump test (short): ");
 		for (int testNum = 1; testNum < MAX_TEST; testNum++) {
 			// Random interval
 			int start = random.nextInt(maxPos - minPos) + minPos;
-			int end = start + random.nextInt(10) * dist; // Distance between a few lines 
+			int end = start + random.nextInt(10) * dist; // Distance between a few lines
 
 			// Dump file
 			String dump = idx.dump("1", start, end, true);
@@ -450,7 +465,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 
 			Gpr.showMark(testNum, 1);
 		}
-
+		System.err.println("");
 		idx.close();
 	}
 
@@ -459,12 +474,13 @@ public class TestCasesFileIndexChrPos extends TestCase {
 	 * @throws IOException
 	 */
 	public void test_24() throws IOException {
+		Gpr.debug("Test");
 		int MAX_TEST = 100;
 		String vcfFileName = "tests/test.chr1.vcf";
 		Random random = new Random(20130217);
 
 		// Index file
-		System.out.println("Indexing file '" + vcfFileName + "'");
+		if (verbose) System.out.println("Indexing file '" + vcfFileName + "'");
 		FileIndexChrPos idx = new FileIndexChrPos(vcfFileName);
 		idx.setVerbose(verbose);
 		idx.setDebug(debug);
@@ -492,7 +508,7 @@ public class TestCasesFileIndexChrPos extends TestCase {
 			int end = random.nextInt(maxPos - minPos) + minPos;
 
 			if (end > start) {
-				System.out.println("Dump test (long) " + testNum + "/" + MAX_TEST + "\tchr1:" + start + "\tchr1:" + end);
+				if (verbose) System.out.println("Dump test (long) " + testNum + "/" + MAX_TEST + "\tchr1:" + start + "\tchr1:" + end);
 				// Dump file
 				String dump = idx.dump("1", start, end, true);
 
@@ -511,9 +527,11 @@ public class TestCasesFileIndexChrPos extends TestCase {
 				Assert.assertEquals(expected.toString(), dump);
 
 				testNum++;
+				Gpr.showMark(testNum, 1);
 			}
 		}
 
+		System.err.println("");
 		idx.close();
 	}
 

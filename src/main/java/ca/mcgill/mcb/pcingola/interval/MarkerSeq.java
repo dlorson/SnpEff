@@ -1,12 +1,14 @@
 package ca.mcgill.mcb.pcingola.interval;
 
+import java.util.Arrays;
+
 import ca.mcgill.mcb.pcingola.binseq.DnaNSequence;
 import ca.mcgill.mcb.pcingola.binseq.DnaSequence;
 import ca.mcgill.mcb.pcingola.util.GprSeq;
 
 /**
  * Marker with a DNA sequence
- * 
+ *
  * @author pcingola
  *
  */
@@ -29,55 +31,53 @@ public class MarkerSeq extends Marker {
 	}
 
 	/**
-	 * Apply seqChange to exon
-	 * 
+	 * Apply variant to exon
+	 *
 	 * WARNING: There might be conditions which change the exon type (e.g. an intron is deleted)
-	 * 			Nevertheless ExonSpliceType s not updated since it reflects the exon type before a sequence change. 
-	 * 
+	 * 			Nevertheless ExonSpliceType s not updated since it reflects the exon type before a sequence change.
+	 *
 	 */
 	@Override
-	public MarkerSeq apply(Variant seqChange) {
+	public MarkerSeq apply(Variant variant) {
 		// Create new exon with updated coordinates
-		MarkerSeq ex = (MarkerSeq) super.apply(seqChange);
+		MarkerSeq ms = (MarkerSeq) super.apply(variant);
 
 		// Exon eliminated?
-		if (ex == null) return null;
+		if (ms == null) return null;
 
-		// Sometimes 'apply' method return 'this'. Since we don't want to update the original exon, we have to create a clone
-		if (ex == this) ex = (MarkerSeq) clone();
+		// Sometimes 'apply' method return 'this'. Since we don't want to update the original marker, we have to create a clone
+		if (ms == this) ms = (MarkerSeq) clone();
 
-		if (seqChange.intersects(this)) {
-			switch (seqChange.getChangeType()) {
+		if (variant.intersects(this)) {
+			switch (variant.getVariantType()) {
 			case SNP:
-				applySnp(seqChange, ex);
+				applySnp(variant, ms);
 				break;
 
 			case INS:
-				applyIns(seqChange, ex);
+				applyIns(variant, ms);
 				break;
 
 			case DEL:
-				applyDel(seqChange, ex);
+				applyDel(variant, ms);
 				break;
 
 			case MNP:
-				applyMnp(seqChange, ex);
+				applyMnp(variant, ms);
 				break;
 
 			default:
-				throw new RuntimeException("Unimplemented method for sequence change type " + seqChange.getChangeType());
+				throw new RuntimeException("Unimplemented method for variant change type " + variant.getVariantType() + "\n\tVariant: " + variant);
 			}
-		} else ex.setSequence(getSequence());
+		} else ms.setSequence(getSequence());
 
-		return ex;
+		return ms;
 	}
 
 	/**
 	 * Apply a change type deletion
-	 * @param seqChange
-	 * @param ex
 	 */
-	protected void applyDel(Variant seqChange, MarkerSeq ex) {
+	protected void applyDel(Variant variant, MarkerSeq markerSeq) {
 		// Update sequence
 		if ((sequence != null) && (!sequence.isEmpty())) {
 
@@ -85,8 +85,8 @@ public class MarkerSeq extends Marker {
 			String seq = isStrandPlus() ? sequence.getSequence() : sequence.reverseWc().getSequence();
 
 			// Apply change to sequence
-			int idxStart = seqChange.getStart() - start;
-			int idxEnd = seqChange.getStart() - start + seqChange.size();
+			int idxStart = variant.getStart() - start;
+			int idxEnd = idxStart + variant.size();
 
 			StringBuilder newSeq = new StringBuilder();
 			if (idxStart >= 0) newSeq.append(seq.substring(0, idxStart));
@@ -94,84 +94,85 @@ public class MarkerSeq extends Marker {
 
 			// Update sequence
 			seq = newSeq.toString();
-			ex.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
+			markerSeq.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
 		}
 	}
 
 	/**
 	 * Apply a change type insertion
-	 * @param seqChange
-	 * @param ex
 	 */
-	protected void applyIns(Variant seqChange, MarkerSeq ex) {
+	protected void applyIns(Variant variant, MarkerSeq markerSeq) {
 		// Update sequence
 		if ((sequence != null) && (!sequence.isEmpty())) {
 
 			// Get sequence in positive strand direction
 			String seq = isStrandPlus() ? sequence.getSequence() : sequence.reverseWc().getSequence();
 
-			String netChange = seqChange.netChange(this);
+			String netChange = variant.netChange(this);
 			// Apply change to sequence
-			int idx = seqChange.getStart() - start - 1;
+			int idx = variant.getStart() - start - 1;
 			if (idx >= 0) seq = seq.substring(0, idx + 1) + netChange + seq.substring(idx + 1);
 			else seq = netChange + seq;
 
 			// Update sequence
-			ex.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
+			markerSeq.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
 		}
 	}
 
 	/**
 	 * Apply a change type MNP
-	 * @param seqChange
-	 * @param ex
 	 */
-	protected void applyMnp(Variant seqChange, MarkerSeq ex) {
+	protected void applyMnp(Variant variant, MarkerSeq markerSeq) {
 		// Update sequence
 		if ((sequence != null) && (!sequence.isEmpty())) {
-			// Get sequence in positive strand direction
-			String seq = isStrandPlus() ? sequence.getSequence() : sequence.reverseWc().getSequence();
 
-			// Apply change to sequence
-			int idxStart = seqChange.getStart() - start;
-			int changeSize = seqChange.intersectSize(this);
-			int idxEnd = seqChange.getStart() - start + changeSize;
+			// Calculate indexes
+			int idxStart = variant.getStart() - start;
+			int idxAlt = 0;
 
+			// Variant starts before this marker (e.g. motif with sequence)
+			if (idxStart < 0) {
+				idxAlt = -idxStart; // Remove first 'idxStart' bases from ALT sequence
+				idxStart = 0;
+			}
+
+			int changeSize = variant.intersectSize(this);
+			int idxEnd = idxStart + changeSize;
+
+			// Apply variant to sequence
+			String seq = isStrandPlus() ? sequence.getSequence() : sequence.reverseWc().getSequence(); // Get sequence in positive strand direction
 			StringBuilder seqsb = new StringBuilder();
-			seqsb.append(seq.substring(0, idxStart));
-			seqsb.append(seqChange.getChange().substring(0, changeSize));
-			seqsb.append(seq.substring(idxEnd));
+			seqsb.append(seq.substring(0, idxStart).toLowerCase());
+			String seqAlt = variant.getAlt().substring(idxAlt, idxAlt + changeSize).toUpperCase();
+			seqsb.append(seqAlt);
+			seqsb.append(seq.substring(idxEnd).toLowerCase());
 
 			// Update sequence
 			seq = seqsb.toString();
-			ex.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
+			markerSeq.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
 		}
 	}
 
 	/**
 	 * Apply a change type SNP
-	 * @param seqChange
-	 * @param ex
 	 */
-	protected void applySnp(Variant seqChange, MarkerSeq ex) {
+	protected void applySnp(Variant variant, MarkerSeq markerSeq) {
 		// Update sequence
 		if ((sequence != null) && (!sequence.isEmpty())) {
 			// Get sequence in positive strand direction
 			String seq = isStrandPlus() ? sequence.getSequence() : sequence.reverseWc().getSequence();
 
 			// Apply change to sequence
-			int idx = seqChange.getStart() - start;
-			seq = seq.substring(0, idx) + seqChange.getChange() + seq.substring(idx + 1);
+			int idx = variant.getStart() - start;
+			seq = seq.substring(0, idx) + variant.getAlt() + seq.substring(idx + 1);
 
 			// Update sequence
-			ex.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
+			markerSeq.setSequence(isStrandPlus() ? seq : GprSeq.reverseWc(seq));
 		}
 	}
 
 	/**
 	 * Base in this marker at position 'index' (relative to marker start)
-	 * @param idx
-	 * @return
 	 */
 	public String basesAt(int index, int len) {
 		if (isStrandMinus()) {
@@ -184,9 +185,6 @@ public class MarkerSeq extends Marker {
 
 	/**
 	 * Base at position 'pos' (genomic coordinates)
-	 * @param pos : Genomic coordinates
-	 * @param len : Number of bases
-	 * @return
 	 */
 	public String basesAtPos(int pos, int len) {
 		int index = pos - start;
@@ -196,13 +194,11 @@ public class MarkerSeq extends Marker {
 
 	/**
 	 * Get  sequence
-	 * 
-	 * WARNING: Sequence is always according to coding 
-	 * strand. E.g. if the strand is negative, the sequence 
-	 * returned by this method is the reverse-WC that you see 
+	 *
+	 * WARNING: Sequence is always according to coding
+	 * strand. E.g. if the strand is negative, the sequence
+	 * returned by this method is the reverse-WC that you see
 	 * in the reference genome
-	 * 
-	 * @param sequence
 	 */
 	public String getSequence() {
 		return sequence.toString();
@@ -210,7 +206,6 @@ public class MarkerSeq extends Marker {
 
 	/**
 	 * Do we have a sequence for this exon?
-	 * @return
 	 */
 	public boolean hasSequence() {
 		if (size() <= 0) return true; // This interval has zero length, so sequence should be empty anyway (it is OK if its empty)
@@ -219,15 +214,27 @@ public class MarkerSeq extends Marker {
 
 	/**
 	 * Set sequence
-	 * 
-	 * WARNING: Sequence is always according to coding 
-	 * strand. So use you should use setSequence( GprSeq.reverseWc( seq ) ) 
+	 *
+	 * WARNING: Sequence is always according to coding
+	 * strand. So use you should use setSequence( GprSeq.reverseWc( seq ) )
 	 * if the marker is in negative strand.
-	 * 
-	 * @param sequence
 	 */
 	public void setSequence(String sequence) {
 		if ((sequence == null) || (sequence.length() <= 0)) this.sequence = DnaSequence.empty();
+
+		// Sometimes sequence length doesn't match interval length
+		if (sequence.length() != size()) {
+
+			if (sequence.length() > size()) {
+				// Sequence is longer? => Trim sequence
+				sequence = sequence.substring(0, size());
+			} else {
+				// Sequence is shorter? Pad with 'N'
+				char ns[] = new char[size() - sequence.length()];
+				Arrays.fill(ns, 'N');
+				sequence = sequence + new String(ns);
+			}
+		}
 
 		if (GprSeq.isAmbiguous(sequence)) this.sequence = new DnaNSequence(sequence); // Use DnaNSequence which supports ambiguous sequences
 		else this.sequence = new DnaSequence(sequence); // Use DnaSequence

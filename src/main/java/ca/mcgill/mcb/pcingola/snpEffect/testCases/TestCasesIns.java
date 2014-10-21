@@ -15,10 +15,10 @@ import ca.mcgill.mcb.pcingola.interval.Gene;
 import ca.mcgill.mcb.pcingola.interval.Genome;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
@@ -28,13 +28,17 @@ import ca.mcgill.mcb.pcingola.vcf.VcfEffect;
 import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
- * Test random SNP changes 
- * 
+ * Test random SNP changes
+ *
  * @author pcingola
  */
 public class TestCasesIns extends TestCase {
 
-	boolean debug = false;
+	public static int N = 1000;
+
+	public static boolean debug = false;
+	public static boolean verbose = false || debug;
+
 	Random rand;
 	Config config;
 	Genome genome;
@@ -95,6 +99,7 @@ public class TestCasesIns extends TestCase {
 
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setSupressOutput(!verbose);
 
 		List<VcfEntry> vcfEnties = cmdEff.run(true);
 		for (VcfEntry ve : vcfEnties) {
@@ -105,10 +110,10 @@ public class TestCasesIns extends TestCase {
 			boolean ok = false;
 			for (VcfEffect veff : ve.parseEffects()) {
 				// Find transcript
-				if (veff.getTranscriptId().equals(trId)) {
+				if (veff.getTranscriptId() != null && veff.getTranscriptId().equals(trId)) {
 					// Check that reported effect is the same
 					String vep = ve.getInfo("EFF_V");
-					String eff = veff.getEffect().toString();
+					String eff = veff.getEffectType().toString();
 
 					if (vep.equals(eff)) ok = true;
 					else {
@@ -170,7 +175,7 @@ public class TestCasesIns extends TestCase {
 	}
 
 	public void test_01() {
-		int N = 1000;
+		Gpr.debug("Test");
 		CodonTable codonTable = genome.codonTable();
 
 		// Test N times
@@ -180,7 +185,8 @@ public class TestCasesIns extends TestCase {
 		for (int i = 0; i < N; i++) {
 			initSnpEffPredictor();
 			if (debug) System.out.println("INS Test iteration: " + i + "\n" + transcript);
-			else System.out.println("INS Test iteration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else if (verbose) System.out.println("INS Test iteration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else Gpr.showMark(i + 1, 1);
 
 			int cdsBaseNum = 0;
 
@@ -213,10 +219,10 @@ public class TestCasesIns extends TestCase {
 
 						// Create a SeqChange
 						if (exon.isStrandMinus()) ins = GprSeq.reverseWc(insPlus);
-						Variant seqChange = new Variant(chromosome, pos, "", "+" + ins, "");
+						Variant variant = new Variant(chromosome, pos, "", "+" + ins, "");
 
 						// Is it an insertion?
-						Assert.assertEquals(true, seqChange.isIns());
+						Assert.assertEquals(true, variant.isIns());
 
 						// Codon change
 						int idx = cdsCodonPos;
@@ -226,24 +232,38 @@ public class TestCasesIns extends TestCase {
 
 						// Expected Effect
 						String effectExpected = "";
+						String aaExpected = "";
 						if (insLen % 3 != 0) {
-							effectExpected = "FRAME_SHIFT(" + aaOld + "/" + aaNew + ")";
+							effectExpected = "FRAME_SHIFT";
+							aaExpected = aaOld + "/" + aaNew;
 						} else {
 							if (cdsCodonPos == 0) {
-								effectExpected = "CODON_INSERTION(" + aaOld + "/" + aaNew + ")";
+								effectExpected = "CODON_INSERTION";
+								aaExpected = aaOld + "/" + aaNew;
 							} else {
-								if (codonNew.startsWith(codonOld)) effectExpected = "CODON_INSERTION(" + aaOld + "/" + aaNew + ")";
-								else effectExpected = "CODON_CHANGE_PLUS_CODON_INSERTION(" + aaOld + "/" + aaNew + ")";
+								if (codonNew.startsWith(codonOld)) {
+									effectExpected = "CODON_INSERTION";
+									aaExpected = aaOld + "/" + aaNew;
+								} else {
+									effectExpected = "CODON_CHANGE_PLUS_CODON_INSERTION";
+									aaExpected = aaOld + "/" + aaNew;
+								}
 							}
 
-							if ((cdsCodonNum == 0) && codonTable.isStartFirst(codonOld) && !codonTable.isStartFirst(codonNew)) effectExpected = "START_LOST(" + aaOld + "/" + aaNew + ")";
-							else if ((aaOld.indexOf('*') >= 0) && (aaNew.indexOf('*') < 0)) {
-								effectExpected = "STOP_LOST(" + aaOld + "/" + aaNew + ")";
-							} else if ((aaNew.indexOf('*') >= 0) && (aaOld.indexOf('*') < 0)) effectExpected = "STOP_GAINED(" + aaOld + "/" + aaNew + ")";
+							if ((cdsCodonNum == 0) && codonTable.isStartFirst(codonOld) && !codonTable.isStartFirst(codonNew)) {
+								effectExpected = "START_LOST";
+								aaExpected = aaOld + "/" + aaNew;
+							} else if ((aaOld.indexOf('*') >= 0) && (aaNew.indexOf('*') < 0)) {
+								effectExpected = "STOP_LOST";
+								aaExpected = aaOld + "/" + aaNew;
+							} else if ((aaNew.indexOf('*') >= 0) && (aaOld.indexOf('*') < 0)) {
+								effectExpected = "STOP_GAINED";
+								aaExpected = aaOld + "/" + aaNew;
+							}
 						}
 
 						// Calculate effects
-						VariantEffects effects = snpEffectPredictor.variantEffect(seqChange);
+						VariantEffects effects = snpEffectPredictor.variantEffect(variant);
 
 						// There should be at least one effect
 						Assert.assertTrue(effects.size() > 0);
@@ -251,17 +271,24 @@ public class TestCasesIns extends TestCase {
 						// Show
 						boolean ok = false;
 						for (VariantEffect effect : effects) {
-							String effStr = effect.effect(true, true, true, false);
+							String effFullStr = effect.effect(true, true, false, false);
+							String effStr = effect.effect(true, false, false, false);
+							String aaStr = effect.getAaChangeOld();
+
 							if (debug) System.out.println("\tPos: " + pos //
 									+ "\tCDS base num: " + cdsBaseNum + " [" + cdsCodonNum + ":" + cdsCodonPos + "]" //
-									+ "\t" + seqChange + "\tstrand" + (seqChange.isStrandPlus() ? "+" : "-") //
+									+ "\t" + variant + "\tstrand" + (variant.isStrandPlus() ? "+" : "-") //
 									+ "\tCodon: " + codonOld + " -> " + codonNew //
 									+ "\tAA: " + aaOld + " -> " + aaNew //
-									+ "\tEffect: " + effStr //
-									+ "\tEffect expected: " + effectExpected //
+									+ "\n\t\tEffect          : '" + effStr + "'\t'" + effFullStr + "'" //
+									+ "\n\t\tEffect expected : '" + effectExpected + "'" //
+									+ "\n\t\tAA              : '" + aaStr + "'" //
+									+ "\n\t\tAA expected     : '" + aaExpected + "'" //
 							);
 
-							ok |= effectExpected.equals(effStr);
+							// Check that there is a match
+							for (String e : effStr.split("\\+"))
+								if (e.equals(effectExpected) && aaStr.equals(aaExpected)) ok = true;
 						}
 
 						// Check effect
@@ -276,10 +303,13 @@ public class TestCasesIns extends TestCase {
 	 * Insertion on minus strand
 	 */
 	public void test_02_InsOffByOne() {
+		Gpr.debug("Test");
 		String args[] = { "-classic", "testENST00000268124", "tests/ins_off_by_one.vcf" };
 
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff snpeff = (SnpEffCmdEff) cmd.snpEffCmd();
+		snpeff.setSupressOutput(!verbose);
+		snpeff.setVerbose(verbose);
 
 		List<VcfEntry> vcfEnties = snpeff.run(true);
 		for (VcfEntry ve : vcfEnties) {
@@ -293,10 +323,12 @@ public class TestCasesIns extends TestCase {
 	}
 
 	public void test_03_InsVep() {
+		Gpr.debug("Test");
 		compareVep("testENST00000268124", "tests/testENST00000268124_ins_vep.vcf", "ENST00000268124");
 	}
 
 	public void test_04_InsVep() {
+		Gpr.debug("Test");
 		compareVep("testHg3770Chr22", "tests/testENST00000445220_ins_vep.vcf", "ENST00000445220");
 	}
 

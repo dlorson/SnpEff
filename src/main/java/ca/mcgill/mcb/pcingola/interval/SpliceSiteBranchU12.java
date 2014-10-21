@@ -1,10 +1,10 @@
 package ca.mcgill.mcb.pcingola.interval;
 
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 
 /**
  * A (putative) U12 branch site.
- * 
+ *
  * @author pablocingolani
  */
 public class SpliceSiteBranchU12 extends SpliceSiteBranch {
@@ -16,7 +16,12 @@ public class SpliceSiteBranchU12 extends SpliceSiteBranch {
 		type = EffectType.SPLICE_SITE_BRANCH_U12;
 	}
 
-	public SpliceSiteBranchU12(Transcript parent, int start, int end, boolean strandMinus, String id) {
+	//	public SpliceSiteBranchU12(Transcript parent, int start, int end, boolean strandMinus, String id) {
+	//		super(parent, start, end, strandMinus, id);
+	//		type = EffectType.SPLICE_SITE_BRANCH_U12;
+	//	}
+
+	public SpliceSiteBranchU12(Intron parent, int start, int end, boolean strandMinus, String id) {
 		super(parent, start, end, strandMinus, id);
 		type = EffectType.SPLICE_SITE_BRANCH_U12;
 	}

@@ -4,8 +4,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
-import junit.framework.Assert;
 import junit.framework.TestCase;
+
+import org.junit.Assert;
+
 import ca.mcgill.mcb.pcingola.codons.CodonTable;
 import ca.mcgill.mcb.pcingola.interval.Chromosome;
 import ca.mcgill.mcb.pcingola.interval.Exon;
@@ -13,11 +15,11 @@ import ca.mcgill.mcb.pcingola.interval.Gene;
 import ca.mcgill.mcb.pcingola.interval.Genome;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
@@ -27,14 +29,15 @@ import ca.mcgill.mcb.pcingola.vcf.VcfEffect;
 import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
- * Test random SNP changes 
- * 
+ * Test random SNP changes
+ *
  * @author pcingola
  */
 public class TestCasesHgvs extends TestCase {
 
 	boolean debug = false;
 	boolean verbose = false || debug;
+	boolean skipLong = false;
 
 	Random rand;
 	Config config;
@@ -53,9 +56,6 @@ public class TestCasesHgvs extends TestCase {
 
 	/**
 	 * Count how many bases are there until the exon
-	 * @param bases
-	 * @param pos
-	 * @return
 	 */
 	int exonBase(char bases[], int pos, int direction) {
 		int countAfter = 0, countBefore = 0;
@@ -121,13 +121,6 @@ public class TestCasesHgvs extends TestCase {
 
 	/**
 	 * Intronic HGS notation
-	 * 
-	 * @param bases
-	 * @param j
-	 * @param pos
-	 * @param refStr
-	 * @param altStr
-	 * @return
 	 */
 	String intronHgsv(char bases[], int j, int pos, String refStr, String altStr) {
 		if (transcript.isStrandMinus()) {
@@ -155,7 +148,7 @@ public class TestCasesHgvs extends TestCase {
 		} else if (type == '3') {
 			typeStr = "*";
 
-			// Count UTR3 bases until end of coding 
+			// Count UTR3 bases until end of coding
 			for (int i = exonBase; (i >= 0) && (i < bases.length); i -= step) {
 				if (bases[i] == type) basesCount++;
 				else if (bases[i] != '-') break;
@@ -177,14 +170,15 @@ public class TestCasesHgvs extends TestCase {
 
 	/**
 	 * Run SnpEff on VCF file
-	 * @param vcfFile
 	 */
-	public void snpEffect(String vcfFile, String genomeVer) {
+	public void snpEffect(String genomeVer, String vcfFile) {
 		// Create command
 		String args[] = { "-classic", "-hgvs", "-ud", "0", genomeVer, vcfFile };
 
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setVerbose(verbose);
+		cmdEff.setSupressOutput(!verbose);
 
 		// Run command
 		List<VcfEntry> list = cmdEff.run(true);
@@ -196,6 +190,7 @@ public class TestCasesHgvs extends TestCase {
 
 			// Load hgvs expexcted annotations into set
 			String hgvsStr = vcfEntry.getInfo("HGVS");
+			String trId = vcfEntry.getInfo("TR");
 			HashSet<String> hgvsExpected = new HashSet<String>();
 			for (String h : hgvsStr.split(",")) {
 				if (h.indexOf(':') > 0) h = h.substring(h.indexOf(':') + 1);
@@ -207,25 +202,31 @@ public class TestCasesHgvs extends TestCase {
 			// Find if HGVS predicted by SnpEff matches expected annotations
 			StringBuilder sb = new StringBuilder();
 			for (VcfEffect eff : vcfEntry.parseEffects()) {
-				String hgvsReal = eff.getAa();
-				String line = "\tHGVS: " + hgvsExpected.contains(hgvsReal) + "\tExpected: " + hgvsExpected + "\tSnpEFf: " + eff.getAa() + "\t" + eff.getGenotype() + "\t" + eff;
-				sb.append(line + "\n");
-				if (debug) System.err.println(line);
-				if (hgvsExpected.contains(hgvsReal)) found = true;
+				if (trId != null && !trId.isEmpty() && trId.equals(eff.getTranscriptId())) {
+					String hgvsReal = eff.getAa();
+					String line = "\tHGVS: " + hgvsExpected.contains(hgvsReal) + "\tExpected: " + hgvsExpected + "\tSnpEFf: " + eff.getAa() + "\t" + eff.getGenotype() + "\t" + eff;
+					sb.append(line + "\n");
+
+					if (debug) System.err.println(line);
+					if (hgvsExpected.contains(hgvsReal)) found = true;
+				}
 			}
 
 			// Not found? Error
 			if (!found) {
 				System.err.println("HGVS not found in variant\n" + vcfEntry + "\n" + sb);
-				// throw new RuntimeException("HGVS not found in variant\n" + vcfEntry);
+				throw new RuntimeException("HGVS not found in variant\n" + vcfEntry);
 			}
 			entryNum++;
 		}
 	}
 
 	public void test_01_coding() {
+		Gpr.debug("Test");
 		int N = 250;
 		CodonTable codonTable = genome.codonTable();
+
+		if (skipLong) throw new RuntimeException("Test skipped!");
 
 		// Test N times
 		//	- Create a random gene transcript, exons
@@ -234,7 +235,8 @@ public class TestCasesHgvs extends TestCase {
 		for (int i = 0; i < N; i++) {
 			initSnpEffPredictor(false, true);
 			if (debug) System.out.println("HGSV Test iteration: " + i + "\n" + transcript);
-			else System.out.println("HGSV Coding\titeration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else if (verbose) System.out.println("HGSV Coding\titeration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else Gpr.showMark(i + 1, 1);
 
 			int cdsBaseNum = 0;
 
@@ -324,25 +326,17 @@ public class TestCasesHgvs extends TestCase {
 				}
 			}
 		}
+		System.err.println("");
 	}
 
-	public void test_02() {
-		snpEffect("tests/hgvs_1.vcf", "testHg3766Chr1");
-	}
-
-	public void test_03_intron_withinCds() {
-		snpEffect("tests/ensembl_hgvs_intron.within_cds.vcf", "testHg3775Chr1");
-	}
-
-	public void test_04_intron_outsideCds() {
-		snpEffect("tests/ensembl_hgvs_intron.outsideCds.vcf", "testHg3775Chr1");
-	}
-
-	public void test_05_intron() {
+	public void test_01_intron() {
+		Gpr.debug("Test");
 		int N = 250;
 
 		int testIter = -1;
 		int testPos = -1;
+
+		if (skipLong) throw new RuntimeException("Test skipped!");
 
 		// Test N times
 		//	- Create a random gene transcript, exons
@@ -366,14 +360,14 @@ public class TestCasesHgvs extends TestCase {
 			char bases[] = trstr.toCharArray();
 
 			// Show data
-			System.out.println("HGSV Intron\titeration:" + checked + "\t" + (transcript.isStrandPlus() ? "+" : "-"));
 			if (verbose) {
+				System.out.println("HGSV Intron\titeration:" + checked + "\t" + (transcript.isStrandPlus() ? "+" : "-"));
 				System.out.println(trstr);
 				System.out.println("Length   : " + transcript.size());
 				System.out.println("CDS start: " + transcript.getCdsStart());
 				System.out.println("CDS end  : " + transcript.getCdsEnd());
 				System.out.println(transcript);
-			}
+			} else Gpr.showMark(it, 1);
 
 			// Check each intronic base
 			for (int j = 0, pos = transcript.getStart(); pos < transcript.getEnd(); j++, pos++) {
@@ -390,7 +384,7 @@ public class TestCasesHgvs extends TestCase {
 					// Ref & Alt
 					String refStr = "A", altStr = "T";
 
-					// Calculate expected hgsv string 
+					// Calculate expected hgsv string
 					String hgsv = intronHgsv(bases, j, pos, refStr, altStr);
 
 					// Calculate effect and compare to expected
@@ -408,5 +402,129 @@ public class TestCasesHgvs extends TestCase {
 
 			if (tested) checked++;
 		}
+		System.err.println("");
 	}
+
+	public void test_02() {
+		Gpr.debug("Test");
+		String genomeName = "testHg3775Chr1";
+		String vcf = "tests/hgvs_1.vep.vcf";
+		CompareToVep comp = new CompareToVep(genomeName, verbose);
+		comp.setCompareHgvs();
+		//		comp.setStrict(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_03() {
+		Gpr.debug("Test");
+		String genomeName = "testHg3775Chr1";
+		String vcf = "tests/ensembl_hgvs_intron.1.vep.vcf";
+		CompareToVep comp = new CompareToVep(genomeName, verbose);
+		comp.setCompareHgvs();
+		comp.setStrict(true);
+		comp.setOnlyProtein(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_04() {
+		Gpr.debug("Test");
+		String genomeName = "testHg3775Chr1";
+		String vcf = "tests/ensembl_hgvs_intron.outsideCds.vep.vcf";
+		CompareToVep comp = new CompareToVep(genomeName, verbose);
+		comp.setCompareHgvs();
+		comp.setStrict(true);
+		comp.setOnlyProtein(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_05() {
+		Gpr.debug("Test");
+		String genomeName = "testHg3775Chr1";
+		String vcf = "tests/ensembl_hgvs_intron.vep.vcf";
+		CompareToVep comp = new CompareToVep(genomeName, verbose);
+		comp.setCompareHgvs();
+		comp.setStrict(true);
+		comp.setOnlyProtein(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_06() {
+		Gpr.debug("Test");
+		String genomeName = "testHg3775Chr1";
+		String vcf = "tests/ensembl_hgvs_intron.within_cds.vep.vcf";
+		CompareToVep comp = new CompareToVep(genomeName, verbose);
+		comp.setCompareHgvs();
+		comp.setStrict(true);
+		comp.setOnlyProtein(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_10_MixedVep_HGVS() {
+		Gpr.debug("Test");
+		String genome = "testHg3775Chr1";
+		String vcf = "tests/mixed_10_hgvs.vep.vcf";
+		CompareToVep comp = new CompareToVep(genome, verbose);
+		comp.setCompareHgvs();
+		comp.setOnlyProtein(true);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	public void test_11_Hg19Hgvs() {
+		Gpr.debug("Test");
+		String genome = "testHg19Hgvs";
+		String vcf = "tests/hgvs_counsyl.vcf";
+		CompareToVep comp = new CompareToVep(genome, verbose);
+		comp.setCompareHgvs();
+		comp.setCompareHgvsProt(false);
+		comp.compareVep(vcf);
+		System.out.println(comp);
+		Assert.assertTrue("No comparissons were made!", comp.checkComapred());
+	}
+
+	/**
+	 * Using non-standard splice size (15 instead of 2)
+	 * may cause some HGVS annotations issues
+	 */
+	public void test_12_BRCA_Splice_15_Hgvs() {
+		Gpr.debug("Test");
+		int spliceSize = 15;
+		String genome = "test_BRCA";
+		String vcf = "tests/test_BRCA_splice_15.vcf";
+
+		// Create SnpEff
+		String args[] = { genome, vcf };
+		SnpEffCmdEff snpeff = new SnpEffCmdEff();
+		snpeff.parseArgs(args);
+		snpeff.setDebug(debug);
+		snpeff.setVerbose(verbose);
+		snpeff.setSupressOutput(!verbose);
+
+		// The problem appears when splice site is large (in this example)
+		snpeff.setSpliceSiteSize(spliceSize);
+		snpeff.setUpDownStreamLength(0);
+
+		// Run & get result (single line)
+		List<VcfEntry> results = snpeff.run(true);
+		VcfEntry ve = results.get(0);
+
+		// Make sure the spleice site is annotatted as "c.1909+12delT" (instead of "c.1910delT")
+		boolean ok = false;
+		for (VcfEffect veff : ve.parseEffects())
+			ok |= veff.getTranscriptId().equals("ENST00000544455") && veff.getHgvsDna().equals("c.1909+12delT");
+
+		Assert.assertTrue(ok);
+	}
+
 }

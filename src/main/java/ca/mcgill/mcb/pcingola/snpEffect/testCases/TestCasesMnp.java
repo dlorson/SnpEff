@@ -4,8 +4,10 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Random;
 
-import junit.framework.Assert;
 import junit.framework.TestCase;
+
+import org.junit.Assert;
+
 import ca.mcgill.mcb.pcingola.codons.CodonTable;
 import ca.mcgill.mcb.pcingola.interval.Chromosome;
 import ca.mcgill.mcb.pcingola.interval.Exon;
@@ -13,11 +15,11 @@ import ca.mcgill.mcb.pcingola.interval.Gene;
 import ca.mcgill.mcb.pcingola.interval.Genome;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
@@ -41,13 +43,16 @@ class Save implements Serializable {
 }
 
 /**
- * Test random SNP changes 
- * 
+ * Test random SNP changes
+ *
  * @author pcingola
  */
 public class TestCasesMnp extends TestCase {
 
+	public static int N = 1000;
+
 	static boolean debug = false;
+	static boolean verbose = false || debug;
 	static int MAX_MNP_LEN = 10;
 
 	// Create factory
@@ -104,7 +109,7 @@ public class TestCasesMnp extends TestCase {
 						&& (ce.getEffectType() != EffectType.SPLICE_SITE_DONOR) //
 						&& (ce.getEffectType() != EffectType.INTRON) //
 						&& (ce.getEffectType() != EffectType.INTERGENIC) //
-				) //
+						) //
 					effect = ce;
 			}
 		} else effect = effects.get();
@@ -116,7 +121,7 @@ public class TestCasesMnp extends TestCase {
 				String codonsExp[] = codons.split("/");
 
 				boolean error = (!codonsExp[0].toUpperCase().equals(effect.getCodonsOld().toUpperCase()) //
-				|| !codonsExp[1].toUpperCase().equals(effect.getCodonsNew().toUpperCase()));
+						|| !codonsExp[1].toUpperCase().equals(effect.getCodonsNew().toUpperCase()));
 
 				if (error || debug) {
 					Gpr.debug("Fatal error:"//
@@ -128,7 +133,7 @@ public class TestCasesMnp extends TestCase {
 							+ "\n\tEffect (pred) : " + effect //
 							+ "\n\tGene          : " + gene//
 							+ "\n\tChromo        : " + chromoSequence//
-					);
+							);
 				}
 
 				/**
@@ -147,10 +152,6 @@ public class TestCasesMnp extends TestCase {
 					Gpr.toFileSerialize(outFile, save);
 					throw new RuntimeException("Codons do not match!\n\tData dumped: '" + outFile + "'");
 				}
-
-				// Check warnings
-				//				if (!effect.getWarning().isEmpty()) Gpr.debug("WARN:" + effect.getWarning() + "\t" + seqChange + "\t" + seqChangeStrand);
-				//				Assert.assertEquals(true, effect.getWarning().isEmpty());
 			}
 		}
 	}
@@ -186,8 +187,6 @@ public class TestCasesMnp extends TestCase {
 
 	/**
 	 * Create a MNP
-	 * @param pos
-	 * @param mnpLen
 	 */
 	String createMnp(int pos, int mnpLen) {
 		char chSeq[] = chromoSequence.toCharArray();
@@ -250,8 +249,6 @@ public class TestCasesMnp extends TestCase {
 
 	/**
 	 * Create a different base
-	 * @param ref
-	 * @return
 	 */
 	char snp(char ref) {
 		char snp = ref;
@@ -261,8 +258,8 @@ public class TestCasesMnp extends TestCase {
 		return snp;
 	}
 
-	public void test() {
-		int N = 1000;
+	public void test_01() {
+		Gpr.debug("Test");
 
 		// Test N times
 		//	- Create a random gene transcript, exons
@@ -272,7 +269,8 @@ public class TestCasesMnp extends TestCase {
 			initSnpEffPredictorRand();
 
 			if (debug) System.out.println("MNP Test iteration: " + i + "\nChromo:\t" + chromoSequence + "\n" + transcript);
-			else System.out.println("MNP Test iteration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else if (verbose) System.out.println("MNP Test iteration: " + i + "\t" + (transcript.isStrandPlus() ? "+" : "-") + "\t" + transcript.cds());
+			else Gpr.showMark(i + 1, 1);
 
 			if (debug) {
 				for (Exon exon : transcript.sortedStrand())
@@ -294,11 +292,15 @@ public class TestCasesMnp extends TestCase {
 		}
 	}
 
-	public void test_01() {
+	public void test_02() {
+		Gpr.debug("Test");
 		// Run
 		String args[] = { "-classic", "-ud", "0", "testHg3766Chr1", "./tests/test.mnp.01.vcf" };
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff snpeff = (SnpEffCmdEff) cmd.snpEffCmd();
+		snpeff.setVerbose(verbose);
+		snpeff.setSupressOutput(!verbose);
+		snpeff.setDebug(debug);
 		List<VcfEntry> results = snpeff.run(true);
 
 		// Check
@@ -309,10 +311,10 @@ public class TestCasesMnp extends TestCase {
 			String aa = eff.getAa();
 			String aaNumStr = aa.substring(1, aa.length() - 1);
 			int aanum = Gpr.parseIntSafe(aaNumStr);
-			System.out.println(eff.getAa() + "\t" + aaNumStr + "\t" + eff);
+			if (verbose) System.out.println("AA: '" + eff.getAa() + "'\tAA Num Str: '" + aaNumStr + "'\teff: " + eff);
 
 			if (aanum <= 0) throw new RuntimeException("Missing AA number!");
 		}
-
 	}
+
 }

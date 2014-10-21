@@ -5,10 +5,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import ca.mcgill.mcb.pcingola.filter.ChangeEffectFilter;
+import ca.mcgill.mcb.pcingola.filter.VariantEffectFilter;
 import ca.mcgill.mcb.pcingola.interval.Marker;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 
 /**
  * Formats output
@@ -16,12 +16,12 @@ import ca.mcgill.mcb.pcingola.snpEffect.Config;
  *    - newSection();   // Create a new 'section' on the output format (e.g. a new seqChange)
  *    - add();			// Add all changes related to this section (i.e. all changes related to this seqChange)
  *    - endSection();	// Output all changes related to this section (output header if needed), clean up list of changes
- *     
+ *
  * @author pcingola
  */
 public abstract class OutputFormatter {
 
-	boolean supressOutput; // Do not print anything
+	boolean supressOutput = false; // Do not print anything (used for testCases)
 	boolean showHeader = true; // Show header information
 	boolean useHgvs; // Use HGVS notation
 	boolean useGeneId; // Use Gene ID instead of gene name
@@ -35,21 +35,20 @@ public abstract class OutputFormatter {
 	String outputFile = null;
 	BufferedWriter out;
 	Marker section;
-	ChangeEffectFilter changeEffectResutFilter = null; // Filter prediction results
-	ArrayList<VariantEffect> changeEffects;
+	VariantEffectFilter variantEffectResutFilter = null; // Filter prediction results
+	ArrayList<VariantEffect> variantEffects;
 	Config config;
 
 	public OutputFormatter() {
-		changeEffects = new ArrayList<VariantEffect>();
+		variantEffects = new ArrayList<VariantEffect>();
 	}
 
 	/**
 	 * Add effects to list
-	 * @param changeEffects
 	 */
-	public void add(VariantEffect changeEffect) {
+	public void add(VariantEffect variantEffect) {
 		// Passes the filter? => Add
-		if ((changeEffectResutFilter == null) || (!changeEffectResutFilter.filter(changeEffect))) changeEffects.add(changeEffect);
+		if ((variantEffectResutFilter == null) || (!variantEffectResutFilter.filter(variantEffect))) variantEffects.add(variantEffect);
 	}
 
 	@Override
@@ -70,7 +69,7 @@ public abstract class OutputFormatter {
 			newOutputFormatter.version = version;
 			newOutputFormatter.chrStr = chrStr;
 			newOutputFormatter.section = section;
-			newOutputFormatter.changeEffectResutFilter = changeEffectResutFilter;
+			newOutputFormatter.variantEffectResutFilter = variantEffectResutFilter;
 			newOutputFormatter.config = config;
 
 		} catch (Exception e) {
@@ -95,7 +94,6 @@ public abstract class OutputFormatter {
 
 	/**
 	 * Finish up section
-	 * @param marker
 	 */
 	public String endSection(Marker marker) {
 		StringBuilder sb = new StringBuilder();
@@ -113,22 +111,13 @@ public abstract class OutputFormatter {
 		sb.append(toString());
 
 		sectionNum++;
-		changeEffects.clear();
+		variantEffects.clear();
 
 		return supressOutput ? null : sb.toString();
 	}
 
 	/**
-	 * End this section and print results
-	 * @param marker
-	 */
-	public void printSection(Marker marker) {
-		print(endSection(marker));
-	}
-
-	/**
 	 * Print a "raw" string to a file
-	 * @param outStr
 	 */
 	public void print(String outStr) {
 		try {
@@ -141,15 +130,22 @@ public abstract class OutputFormatter {
 				if (out != null) {
 					out.write(outStr);
 					out.write("\n");
-				} else System.out.println(outStr); // Show on STDOUT
+				} else if (!supressOutput) System.out.println(outStr); // Show on STDOUT
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	public void setChangeEffectResutFilter(ChangeEffectFilter changeEffectResutFilter) {
-		this.changeEffectResutFilter = changeEffectResutFilter;
+	/**
+	 * End this section and print results
+	 */
+	public void printSection(Marker marker) {
+		print(endSection(marker));
+	}
+
+	public void setChangeEffectResutFilter(VariantEffectFilter changeEffectResutFilter) {
+		this.variantEffectResutFilter = changeEffectResutFilter;
 	}
 
 	public void setChrStr(String chrStr) {
@@ -202,7 +198,6 @@ public abstract class OutputFormatter {
 
 	/**
 	 * Starts a new section
-	 * @param section
 	 */
 	public void startSection(Marker marker) {
 		section = marker;

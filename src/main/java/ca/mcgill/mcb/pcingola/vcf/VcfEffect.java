@@ -1,5 +1,9 @@
 package ca.mcgill.mcb.pcingola.vcf;
 
+import java.util.LinkedList;
+import java.util.List;
+
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 
@@ -23,7 +27,9 @@ public class VcfEffect {
 	String effectStrings[];
 	FormatVersion formatVersion;
 	String effString;
-	VariantEffect.EffectType effect;
+	EffectType effectType;
+	String effectTypesStr;
+	List<EffectType> effectTypes;
 	String effectDetails;
 	VariantEffect.EffectImpact impact;
 	VariantEffect.FunctionalClass funClass;
@@ -40,9 +46,6 @@ public class VcfEffect {
 
 	/**
 	 * Convert from field name to field number
-	 * @param name
-	 * @param formatVersion
-	 * @return
 	 */
 	public static int fieldNum(String name, FormatVersion formatVersion) {
 		int fieldNum = 0;
@@ -142,9 +145,13 @@ public class VcfEffect {
 		parse();
 	}
 
+	public void addEffectType(EffectType effectType) {
+		effectTypes.add(effectType);
+		this.effectType = null;
+	}
+
 	/**
 	 * Guess effect format version
-	 * @return
 	 */
 	public FormatVersion formatVersion() {
 		// Already set?
@@ -193,16 +200,50 @@ public class VcfEffect {
 		return codon;
 	}
 
-	public VariantEffect.EffectType getEffect() {
-		return effect;
-	}
-
 	public String getEffectDetails() {
 		return effectDetails;
 	}
 
+	public String getEffectsStr() {
+		StringBuilder sb = new StringBuilder();
+		for (EffectType et : effectTypes) {
+			if (sb.length() > 0) sb.append("+");
+			sb.append(et);
+		}
+		return sb.toString();
+	}
+
+	public String getEffectsStrSo() {
+		StringBuilder sb = new StringBuilder();
+		for (EffectType et : effectTypes) {
+			if (sb.length() > 0) sb.append("+");
+			sb.append(et.toSequenceOntology());
+		}
+		return sb.toString();
+	}
+
 	public String getEffectString() {
 		return effectString;
+	}
+
+	public EffectType getEffectType() {
+		if (effectType != null) return effectType;
+		if (effectTypes == null || effectTypes.isEmpty()) return EffectType.NONE;
+
+		// Pick highest effect type
+		effectType = EffectType.NONE;
+		for (EffectType et : effectTypes)
+			if (et.compareTo(effectType) < 0) effectType = et;
+
+		return effectType;
+	}
+
+	public List<EffectType> getEffectTypes() {
+		return effectTypes;
+	}
+
+	public String getEffectTypesStr() {
+		return effectTypesStr;
 	}
 
 	public String getEffString() {
@@ -229,12 +270,40 @@ public class VcfEffect {
 		return genotype;
 	}
 
+	public String getHgvsDna() {
+		if (aa == null) return null;
+		if (aa.indexOf('/') > 0) {
+			String f[] = aa.split("/");
+			if (f.length > 1 && (f[1].startsWith("c.") || f[1].startsWith("n."))) return f[1];
+		} else if (aa.startsWith("c.") || aa.startsWith("n.")) return aa;
+
+		return null;
+	}
+
+	public String getHgvsProt() {
+		if (aa == null) return null;
+		if (aa.indexOf('/') > 0) {
+			String f[] = aa.split("/");
+			if (f.length > 0 && f[0].startsWith("p.")) return f[0];
+		} else if (aa.startsWith("p.")) return aa;
+
+		return null;
+	}
+
 	public VariantEffect.EffectImpact getImpact() {
 		return impact;
 	}
 
 	public String getTranscriptId() {
 		return transcriptId;
+	}
+
+	public boolean hasEffectType(EffectType effType) {
+		if (effectTypes == null) return false;
+		for (EffectType et : effectTypes)
+			if (et == effType) return true;
+		return false;
+
 	}
 
 	void parse() {
@@ -249,7 +318,8 @@ public class VcfEffect {
 
 			// Effect
 			effString = effectStrings[index];
-			effect = VariantEffect.EffectType.parse(parseEffect(effectStrings[index]));
+			effectTypesStr = effectStrings[index];
+			effectTypes = parseEffect(effectStrings[index]);
 			effectDetails = parseEffectDetails(effectStrings[index]); // Effect details: everything between '['  and ']' (e.g. Regulation, Custom, Motif, etc.)
 			index++;
 
@@ -303,10 +373,17 @@ public class VcfEffect {
 		}
 	}
 
-	String parseEffect(String eff) {
+	List<EffectType> parseEffect(String eff) {
 		int idx = eff.indexOf('[');
-		if (idx < 0) return eff;
-		return eff.substring(0, idx);
+		if (idx > 0) eff = eff.substring(0, idx);
+
+		List<EffectType> effs = new LinkedList<EffectType>();
+		if (eff.isEmpty()) return effs;
+
+		for (String es : eff.split("\\+"))
+			effs.add(EffectType.parse(es));
+
+		return effs;
 	}
 
 	/**
@@ -339,12 +416,13 @@ public class VcfEffect {
 		this.codon = codon;
 	}
 
-	public void setEffect(VariantEffect.EffectType effect) {
-		this.effect = effect;
-	}
-
 	public void setEffectDetails(String effectDetails) {
 		this.effectDetails = effectDetails;
+	}
+
+	public void setEffectType(EffectType effect) {
+		effectTypes = new LinkedList<EffectType>();
+		addEffectType(effect);
 	}
 
 	public void setExonId(String exonId) {
@@ -370,7 +448,12 @@ public class VcfEffect {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(effect);
+
+		for (EffectType et : effectTypes) {
+			if (sb.length() > 0) sb.append("+");
+			sb.append(et);
+		}
+
 		if ((effectDetails != null) && !effectDetails.isEmpty()) sb.append("[" + effectDetails + "]");
 		sb.append("(");
 

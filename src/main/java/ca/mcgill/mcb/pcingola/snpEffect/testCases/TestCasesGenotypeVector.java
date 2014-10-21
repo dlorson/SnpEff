@@ -5,21 +5,29 @@ import java.util.Random;
 import junit.framework.Assert;
 import junit.framework.TestCase;
 import ca.mcgill.mcb.pcingola.genotypes.GenotypeVector;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
  * Test cases for GenotypeVector class
- * 
+ *
  * @author pcingola
  */
 public class TestCasesGenotypeVector extends TestCase {
 
-	public void test_01() {
-		// Show masks (just to check they are OK)
-		for (byte m : GenotypeVector.mask)
-			System.out.println("Mask          :" + m + "\t" + Integer.toBinaryString(m & 0xff));
+	boolean verbose = false;
 
-		for (byte m : GenotypeVector.reverseMask)
-			System.out.println("Reverse Mask  :" + m + "\t" + Integer.toBinaryString(m & 0xff));
+	public void test_01() {
+		Gpr.debug("Test");
+		// Show masks (just to check they are OK)
+		for (byte m : GenotypeVector.mask) {
+			String line = "Mask          :" + m + "\t" + Integer.toBinaryString(m & 0xff);
+			if (verbose) System.out.println(line);
+		}
+
+		for (byte m : GenotypeVector.reverseMask) {
+			String line = "Reverse Mask  :" + m + "\t" + Integer.toBinaryString(m & 0xff);
+			if (verbose) System.out.println(line);
+		}
 
 		for (int code = 0; code < 4; code++) {
 			GenotypeVector gv = new GenotypeVector(2);
@@ -33,6 +41,7 @@ public class TestCasesGenotypeVector extends TestCase {
 	}
 
 	public void test_02() {
+		Gpr.debug("Test");
 		Random rand = new Random(20121221);
 		GenotypeVector gv = new GenotypeVector(1000);
 

@@ -26,7 +26,6 @@ import ca.mcgill.mcb.pcingola.interval.Markers;
 import ca.mcgill.mcb.pcingola.interval.NextProt;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.serializer.MarkerSerializer;
-import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
 import ca.mcgill.mcb.pcingola.stats.CountByType;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.util.GprSeq;
@@ -47,11 +46,11 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	// We don't care about these categories
 	public static final String CATAGORY_BLACK_LIST_STR[] = { "" //
-			, "sequence variant" //
-			, "sequence conflict" //
-			, "mature protein" //
-			, "mutagenesis site" //
-			, "retained intron" //
+		, "sequence variant" //
+		, "sequence conflict" //
+		, "mature protein" //
+		, "mutagenesis site" //
+		, "retained intron" //
 	};
 
 	public static final String NODE_NAME_PROTEIN = "protein";
@@ -116,7 +115,7 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 				+ "\n\tAA sequence length  : " + 1 //
 				+ "\n\tMin AA count        : " + HIGHLY_CONSERVED_AA_COUNT //
 				+ "\n\tMin AA conservation : " + HIGHLY_CONSERVED_AA_PERCENT //
-		);
+				);
 
 		ArrayList<String> keys = new ArrayList<String>();
 		keys.addAll(countAaSequenceByType.keySet());
@@ -175,11 +174,11 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 			// Show line
 			if (verbose) System.out.println( //
 					"\t" + total //
-							+ "\t" + maxCount //
-							+ "\t" + avgLen //
-							+ "\t" + (highlyConservedAaSequence ? "High" : "") //
-							+ "\t" + key //
-							+ "\t" + sb //
+					+ "\t" + maxCount //
+					+ "\t" + avgLen //
+					+ "\t" + (highlyConservedAaSequence ? "High" : "") //
+					+ "\t" + key //
+					+ "\t" + sb //
 					);
 
 			// Mark highly conserved
@@ -200,9 +199,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Add annotations
-	 * @param category
-	 * @param contrVoc
-	 * @param sequence
 	 */
 	void countAaSequence(String category, String contrVoc, String description, String sequence) {
 		String key = key(category, contrVoc, description);
@@ -212,8 +208,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse a node
-	 * @param tabs
-	 * @param node
 	 */
 	ArrayList<Node> findNodes(Node node, String nodeName, String nodeValue, String attrName, String attrValue) {
 		ArrayList<Node> resulstsList = new ArrayList<Node>();
@@ -248,13 +242,13 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 								&& ((nodeValue == null) || ((value != null) && value.equals(nodeValue))) //
 								&& ((attrName == null) || ((aname != null) && attrName.equals(aname))) //
 								&& ((attrValue == null) || ((aval != null) && attrValue.equals(aval))) //
-						) found = true;
+								) found = true;
 					}
 				}
 			} else {
 				if (((nodeName == null) || ((name != null) && name.equals(nodeName))) //
 						&& ((nodeValue == null) || ((value != null) && value.equals(nodeValue))) //
-				) {
+						) {
 					found = true;
 				}
 			}
@@ -286,8 +280,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse a node list
-	 * @param tabs
-	 * @param nodeList
 	 */
 	List<Node> findNodes(NodeList nodeList, String nodeName, String nodeValue, String attrName, String attrValue) {
 		ArrayList<Node> resulstsList = new ArrayList<Node>();
@@ -302,12 +294,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Find only one node
-	 * @param node
-	 * @param nodeName
-	 * @param nodeValue
-	 * @param attrName
-	 * @param attrValue
-	 * @return
 	 */
 	Node findOneNode(Node node, String nodeName, String nodeValue, String attrName, String attrValue) {
 		ArrayList<Node> resulstsList = findNodes(node, nodeName, nodeValue, attrName, attrValue);
@@ -317,7 +303,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Find sequences for a node
-	 * @param node
 	 */
 	void findSequences(Node node) {
 		// Get sequences
@@ -332,7 +317,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Get uniqueId -> EnsemblId mapping for transcripts
-	 * @param node
 	 * @return true if any was found
 	 */
 	boolean findTrIds(Node node) {
@@ -358,9 +342,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Get an attribute from a node
-	 * @param node
-	 * @param attrName
-	 * @return
 	 */
 	String getAttribute(Node node, String attrName) {
 		if (node == null) return null;
@@ -376,9 +357,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Get Ensembl gene ID
-	 * @param node
-	 * @param uniqueName
-	 * @return
 	 */
 	String getGeneId(Node node, String uniqueName) {
 		Node geneNode = findOneNode(node, NODE_NAME_GENE, null, ATTR_NAME_DATABASE, ATTR_VALUE_ENSEMBL);
@@ -387,8 +365,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Get text form a node
-	 * @param n
-	 * @return
 	 */
 	String getText(Node n) {
 		if (n == null) return null;
@@ -397,10 +373,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Create a key
-	 * @param category
-	 * @param contrVoc
-	 * @param description
-	 * @return
 	 */
 	String key(String category, String contrVoc, String description) {
 		category = vcfSafe(category);
@@ -414,8 +386,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Get node type as a string
-	 * @param type
-	 * @return
 	 */
 	String nodeType(short type) {
 		switch (type) {
@@ -452,7 +422,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse an XML file
-	 * @param xmlFileName
 	 */
 	void parse(String xmlFileName) {
 		try {
@@ -487,7 +456,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse a protein node
-	 * @param node
 	 */
 	void parseAnnotation(Node ann, String geneId, String category) {
 		// Description
@@ -550,7 +518,7 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 						+ "\t" + subSeq //
 						+ "\t" + trData.codon //
 						+ "\t" + trData.aa//
-				);
+						);
 
 				// Create marker
 				String id = key(category, contrVoc, description);
@@ -566,8 +534,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse "<annotations>" XML mark
-	 * @param node
-	 * @param geneId
 	 */
 	void parseAnnotations(Node node, String geneId) {
 		// Find all <annotationList> XML marks
@@ -612,7 +578,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Parse a protein node
-	 * @param node
 	 */
 	void parseProteinNode(Node node) {
 		String uniqueName = getAttribute(node, ATTR_NAME_UNIQUE_NAME);
@@ -631,20 +596,18 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Run main analysis
-	 * @param xmlFileName
 	 */
 	@Override
 	public boolean run() {
 		// Initialzie
 		loadConfig(); // Read config file
+		loadDb();
 
-		if (verbose) Timer.showStdErr("Reading database for genome version '" + genomeVer + "' from file '" + config.getFileSnpEffectPredictor() + "' (this might take a while)");
-		SnpEffectPredictor snpEffectPredictor = config.loadSnpEffectPredictor();
 		genome = config.getGenome();
 		if (verbose) Timer.showStdErr("done");
 
 		// Build transcript map
-		for (Gene gene : snpEffectPredictor.getGenome().getGenes())
+		for (Gene gene : config.getSnpEffectPredictor().getGenome().getGenes())
 			for (Transcript tr : gene)
 				trById.put(tr.getId(), tr);
 
@@ -666,7 +629,7 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 				+ "\n\tMatch       : " + proteinOk.size() //
 				+ "\n\tDifferences : " + proteinDifferences.size() //
 				+ "\n\tAA errros   : " + aaErrors //
-		);
+				);
 
 		analyzeSequenceConservation();
 
@@ -704,9 +667,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Show a node as a string
-	 * @param node
-	 * @param tabs
-	 * @return
 	 */
 	String toString(Node node) {
 		StringBuilder sb = new StringBuilder();
@@ -743,12 +703,6 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 
 	/**
 	 * Gather data from transcript
-	 * @param isoformRef
-	 * @param aaStart
-	 * @param aaEnd
-	 * @param sequence
-	 * @param subSeq
-	 * @return
 	 */
 	TranscriptData transcriptData(String isoformRef, int aaStart, int aaEnd, String sequence, String subSeq) {
 		String trId = trIdByUniqueName.get(isoformRef);
@@ -785,7 +739,7 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 						// More sanity checks
 						trData.codon = tr.cds().substring(codonStart, codonEnd + 1);
 						trData.aa = CodonTables.getInstance().aa(trData.codon, genome, trData.chrName);
-						if (!subSeq.equals(trData.aa)) Timer.showStdErr("WARNING: AA differ: " //
+						if (!subSeq.equals(trData.aa) && verbose) Timer.showStdErr("WARNING: AA differ: " //
 								+ "\tUniqueName" + isoformRef //
 								+ "\tEnsembl ID: " + trId //
 								+ "\tEnsembl  AA: " + trData.aa//
@@ -794,7 +748,7 @@ public class SnpEffCmdBuildNextProt extends SnpEff {
 						else trData.ok = true; // All sanity checks passed
 					}
 				} else {
-					if (!proteinDifferences.contains(trId)) Timer.showStdErr("WARNING: Protein sequences differ: " //
+					if (!proteinDifferences.contains(trId) && verbose) Timer.showStdErr("WARNING: Protein sequences differ: " //
 							+ "\tUniqueName" + isoformRef //
 							+ "\tEnsembl ID: " + trId //
 							+ "\n\tEnsembl  (" + protein.length() + "): " + protein //

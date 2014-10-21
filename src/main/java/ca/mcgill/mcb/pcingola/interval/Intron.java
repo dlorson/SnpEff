@@ -1,6 +1,6 @@
 package ca.mcgill.mcb.pcingola.interval;
 
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 
 /**
  * Intron
@@ -43,7 +43,6 @@ public class Intron extends Marker {
 
 	/**
 	 * Create splice site region
-	 * @return
 	 */
 	public SpliceSiteRegion createSpliceSiteRegionStart(int sizeMin, int sizeMax) {
 		if (spliceSiteRegionStart != null) return spliceSiteRegionStart;

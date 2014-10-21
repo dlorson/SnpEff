@@ -103,17 +103,19 @@ public class Download {
 
 			// Print info about resource
 			Date date = new Date(connection.getLastModified());
-			if (verbose) Timer.showStdErr("Copying file (type: " + connection.getContentType() + ", modified on: " + date + ")");
+			if (debug) Timer.showStdErr("Copying file (type: " + connection.getContentType() + ", modified on: " + date + ")");
 
 			// Open local file
 			if (verbose) Timer.showStdErr("Local file name: '" + localFile + "'");
 
 			// Create local directory if it doesn't exists
 			File file = new File(localFile);
-			File path = new File(file.getParent());
-			if (!path.exists()) {
-				if (verbose) Timer.showStdErr("Local path '" + path + "' doesn't exist, creating.");
-				path.mkdirs();
+			if (file != null && file.getParent() != null) {
+				File path = new File(file.getParent());
+				if (!path.exists()) {
+					if (verbose) Timer.showStdErr("Local path '" + path + "' doesn't exist, creating.");
+					path.mkdirs();
+				}
 			}
 
 			FileOutputStream os = null;
@@ -162,7 +164,7 @@ public class Download {
 			String entryPath[] = entryName.split("/"); // Entry name should be something like 'data/genomeVer/file';
 			String dataName = entryPath[entryPath.length - 2] + "/" + entryPath[entryPath.length - 1]; // remove the 'data/' part
 			entryName = dataDir + "/" + dataName; // Ad local 'data' dir
-			if (verbose) Timer.showStdErr("Local file name: '" + entryName + "'");
+			if (debug) Timer.showStdErr("Local file name: '" + entryName + "'");
 		}
 
 		return entryName;
@@ -204,7 +206,8 @@ public class Download {
 			while ((entry = zipIn.getNextEntry()) != null) {
 				if (!entry.isDirectory()) {
 					String localEntryName = parseEntryPath(entry.getName(), mainDir, dataDir);
-					if (verbose) Timer.showStdErr("Extracting file '" + entry.getName() + "' to '" + localEntryName + "'");
+					if (debug) Timer.showStdErr("Extracting file '" + entry.getName() + "' to '" + localEntryName + "'");
+					else if (verbose) Timer.showStdErr("Extracting file '" + entry.getName() + "'");
 
 					// Backup entry
 					if (zipBackup != null) backupFile(zipBackup, localEntryName);

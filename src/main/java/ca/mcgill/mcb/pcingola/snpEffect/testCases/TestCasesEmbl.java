@@ -8,10 +8,11 @@ import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryEmbl;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
  * Test case for EMBL file parsing (database creation)
- * 
+ *
  * @author pcingola
  */
 public class TestCasesEmbl extends TestCase {
@@ -25,9 +26,6 @@ public class TestCasesEmbl extends TestCase {
 
 	/**
 	 * Build a genome from a embl file and compare results to 'expected' results
-	 * @param genome
-	 * @param emblFile
-	 * @param resultFile
 	 */
 	public SnpEffectPredictor build(String genome, String emblFile) {
 		// Build
@@ -39,6 +37,7 @@ public class TestCasesEmbl extends TestCase {
 	}
 
 	public void testCase_Exon_Simple() {
+		Gpr.debug("Test");
 		// Create SnpEff predictor
 		String genome = "testEmblPberghei";
 		String resultFile = "tests/testEmblPberghei.genes.embl";
@@ -54,9 +53,7 @@ public class TestCasesEmbl extends TestCase {
 					if (e.intersects(pos)) {
 						String seq = e.getSequence();
 						String base = e.basesAtPos(pos, 1);
-						System.out.println("Seq : " + seq //
-								+ "\nBase: " + base //
-						);
+						if (debug) System.out.println("Seq : " + seq + "\nBase: " + base);
 						Assert.assertEquals("g", base);
 					}
 				}

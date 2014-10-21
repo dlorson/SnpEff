@@ -116,6 +116,11 @@ public class GprSeq {
 		return codes;
 	}
 
+	public static int aaCodePairCode(byte aa1, byte aa2) {
+		if (aa1 < 0 || aa2 < 0) return -1;
+		return aa1 * GprSeq.AMINO_ACIDS.length + aa2;
+	}
+
 	/**
 	 * Code an AA-pair
 	 */
@@ -186,6 +191,34 @@ public class GprSeq {
 	public static char code2aa(byte aacode) {
 		if (aacode < 0) return '-';
 		return CODE_TO_AA[aacode];
+	}
+
+	/**
+	 * Convert from AA_code to AA letter
+	 */
+	public static String code2aa(byte aacodes[]) {
+		char c[] = new char[aacodes.length];
+
+		for (int i = 0; i < aacodes.length; i++) {
+			if (aacodes[i] < 0) c[i] = '-';
+			else c[i] = CODE_TO_AA[aacodes[i]];
+		}
+
+		return new String(c);
+	}
+
+	/**
+	 * Convert from AA_code to AA letter
+	 */
+	public static String code2aa(int aacodes[]) {
+		char c[] = new char[aacodes.length];
+
+		for (int i = 0; i < aacodes.length; i++) {
+			if (aacodes[i] < 0) c[i] = '-';
+			else c[i] = CODE_TO_AA[aacodes[i]];
+		}
+
+		return new String(c);
 	}
 
 	public static String code2aaPair(int code) {
@@ -358,8 +391,6 @@ public class GprSeq {
 
 	/**
 	 * Reverse Watson-Cricks complement
-	 * @param seq
-	 * @return
 	 */
 	public static String reverseWc(String seq) {
 		char rwc[] = new char[seq.length()];
@@ -373,9 +404,6 @@ public class GprSeq {
 
 	/**
 	 * Transform into a FASTA formatted string
-	 * @param name
-	 * @param sequence
-	 * @return
 	 */
 	public static String string2fasta(String name, String sequence) {
 		StringBuffer sb = new StringBuffer();
@@ -392,38 +420,43 @@ public class GprSeq {
 
 	/**
 	 * Watson-Cricks complement
-	 * @param sequenceBits
-	 * @return
 	 */
 	public static char wc(char base) {
 		switch (base) {
 		case 'A':
-		case 'a':
 			return 'T';
+		case 'a':
+			return 't';
+
 		case 'C':
-		case 'c':
 			return 'G';
+		case 'c':
+			return 'g';
+
 		case 'G':
-		case 'g':
 			return 'C';
+		case 'g':
+			return 'c';
+
 		case 'T':
-		case 't':
 		case 'U':
-		case 'u':
 			return 'A';
-		case 'n':
+		case 't':
+		case 'u':
+			return 'a';
+
 		case 'N':
 			return 'N';
+		case 'n':
+			return 'n';
+
 		default:
 			return base;
-			// throw new RuntimeException("Unknown base '" + base + "'");
 		}
 	}
 
 	/**
 	 * Watson-Cricks complement
-	 * @param seq
-	 * @return
 	 */
 	public static String wc(String seq) {
 		char rwc[] = new char[seq.length()];

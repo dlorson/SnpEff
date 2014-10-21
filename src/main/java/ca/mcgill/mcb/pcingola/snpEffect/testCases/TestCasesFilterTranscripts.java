@@ -6,13 +6,14 @@ import junit.framework.Assert;
 import junit.framework.TestCase;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.vcf.VcfEffect;
 import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
  *
- * Filter transcripts 
- * 
+ * Filter transcripts
+ *
  * @author pcingola
  */
 public class TestCasesFilterTranscripts extends TestCase {
@@ -27,9 +28,11 @@ public class TestCasesFilterTranscripts extends TestCase {
 	 * Filter transcripts from a file
 	 */
 	public void test_01() {
-		String args[] = { "-v" //
-				, "-noStats" // 
-				, "-i", "vcf", "-o", "vcf" //
+		Gpr.debug("Test");
+		String args[] = { //
+		"-noStats" //
+				, "-i", "vcf" //
+				, "-o", "vcf" //
 				, "-classic" //
 				, "-onlyTr", "tests/filterTranscripts_01.txt"//
 				, "testHg3765Chr22" //
@@ -38,15 +41,17 @@ public class TestCasesFilterTranscripts extends TestCase {
 
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setVerbose(verbose);
+		cmdEff.setSupressOutput(!verbose);
 		List<VcfEntry> vcfEntries = cmdEff.run(true);
 		for (VcfEntry ve : vcfEntries) {
-			System.out.println(ve);
+			if (verbose) System.out.println(ve);
 
 			// Get effect string
 			String effs = ve.getInfo(VcfEffect.VCF_INFO_EFF_NAME);
 			for (String effStr : effs.split(",")) {
 				VcfEffect veff = new VcfEffect(effStr);
-				System.out.println("\ttrId:" + veff.getTranscriptId() + "\t" + veff);
+				if (verbose) System.out.println("\ttrId:" + veff.getTranscriptId() + "\t" + veff);
 
 				Assert.assertEquals("ENST00000400573", veff.getTranscriptId());
 			}
@@ -57,9 +62,11 @@ public class TestCasesFilterTranscripts extends TestCase {
 	 * Filter transcripts from a file
 	 */
 	public void test_02() {
-		String args[] = { "-v"//
-				, "-noStats" // 
-				, "-i", "vcf", "-o", "vcf" //
+		Gpr.debug("Test");
+		String args[] = { //
+		"-noStats" //
+				, "-i", "vcf" //
+				, "-o", "vcf" //
 				, "-classic" //
 				, "-onlyTr", "tests/filterTranscripts_02.txt"//
 				, "testHg3765Chr22" //
@@ -68,15 +75,18 @@ public class TestCasesFilterTranscripts extends TestCase {
 
 		SnpEff cmd = new SnpEff(args);
 		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setVerbose(verbose);
+		cmdEff.setSupressOutput(!verbose);
+
 		List<VcfEntry> vcfEntries = cmdEff.run(true);
 		for (VcfEntry ve : vcfEntries) {
-			System.out.println(ve);
+			if (verbose) System.out.println(ve);
 
 			// Get effect string
 			String effs = ve.getInfo(VcfEffect.VCF_INFO_EFF_NAME);
 			for (String effStr : effs.split(",")) {
 				VcfEffect veff = new VcfEffect(effStr);
-				System.out.println("\ttrId:" + veff.getTranscriptId() + "\t" + veff);
+				if (verbose) System.out.println("\ttrId:" + veff.getTranscriptId() + "\t" + veff);
 
 				if (veff.getTranscriptId().equals("ENST00000400573") || veff.getTranscriptId().equals("ENST00000262608")) {
 					// OK

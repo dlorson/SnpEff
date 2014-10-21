@@ -2,7 +2,7 @@ package ca.mcgill.mcb.pcingola.interval;
 
 import ca.mcgill.mcb.pcingola.interval.Variant.VariantType;
 import ca.mcgill.mcb.pcingola.serializer.MarkerSerializer;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.ErrorWarningType;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 
@@ -53,28 +53,26 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 	}
 
 	/**
-	 * Apply seqChange to exon
+	 * Apply variant to exon
 	 *
 	 * WARNING: There might be conditions which change the exon type (e.g. an intron is deleted)
 	 * 			Nevertheless ExonSpliceType s not updated since it reflects the exon type before a sequence change.
 	 *
 	 */
 	@Override
-	public Exon apply(Variant seqChange) {
+	public Exon apply(Variant variant) {
 		// Create new exon with updated coordinates
-		Exon ex = (Exon) super.apply(seqChange);
+		Exon ex = (Exon) super.apply(variant);
 
 		// Update sites
-		if (spliceSiteAcceptor != null) ex.spliceSiteAcceptor = (SpliceSiteAcceptor) spliceSiteAcceptor.apply(seqChange);
-		if (spliceSiteDonor != null) ex.spliceSiteDonor = (SpliceSiteDonor) spliceSiteDonor.apply(seqChange);
+		if (spliceSiteAcceptor != null) ex.spliceSiteAcceptor = (SpliceSiteAcceptor) spliceSiteAcceptor.apply(variant);
+		if (spliceSiteDonor != null) ex.spliceSiteDonor = (SpliceSiteDonor) spliceSiteDonor.apply(variant);
 
 		return ex;
 	}
 
 	/**
 	 * Create a splice site acceptor of 'maxSize' length
-	 * @param size
-	 * @return
 	 */
 	public SpliceSiteAcceptor createSpliceSiteAcceptor(int size) {
 		if (spliceSiteAcceptor != null) return spliceSiteAcceptor;
@@ -82,16 +80,25 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 		size = size - 1;
 		if (size < 0) return null;
 
-		if (isStrandPlus()) spliceSiteAcceptor = new SpliceSiteAcceptor(this, start - 1 - size, start - 1, strandMinus, id);
-		else spliceSiteAcceptor = new SpliceSiteAcceptor(this, end + 1, end + 1 + size, strandMinus, id);
+		int ssstart, ssend;
+		if (isStrandPlus()) {
+			ssstart = start - 1 - size;
+			ssend = start - 1;
+		} else {
+			ssstart = end + 1;
+			ssend = end + 1 + size;
+		}
+
+		Intron intron = ((Transcript) parent).findIntron(ssstart);
+		if (intron == null) return null;
+
+		spliceSiteAcceptor = new SpliceSiteAcceptor(intron, ssstart, ssend, strandMinus, id);
 
 		return spliceSiteAcceptor;
 	}
 
 	/**
 	 * Create a splice site donor of 'maxSize' length
-	 * @param size
-	 * @return
 	 */
 	public SpliceSiteDonor createSpliceSiteDonor(int size) {
 		if (spliceSiteDonor != null) return spliceSiteDonor;
@@ -99,17 +106,25 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 		size = size - 1;
 		if (size < 0) return null;
 
-		if (isStrandPlus()) spliceSiteDonor = new SpliceSiteDonor(this, end + 1, end + 1 + size, strandMinus, id);
-		else spliceSiteDonor = new SpliceSiteDonor(this, start - 1 - size, start - 1, strandMinus, id);
+		int ssstart, ssend;
+		if (isStrandPlus()) {
+			ssstart = end + 1;
+			ssend = end + 1 + size;
+		} else {
+			ssstart = start - 1 - size;
+			ssend = start - 1;
+		}
+
+		Intron intron = ((Transcript) parent).findIntron(ssstart);
+		if (intron == null) return null;
+
+		spliceSiteDonor = new SpliceSiteDonor(intron, ssstart, ssend, strandMinus, id);
 
 		return spliceSiteDonor;
 	}
 
 	/**
 	 * Create splice site regions
-	 * @param sizeExon
-	 * @param sizeIntron
-	 * @return
 	 */
 	public SpliceSiteRegion createSpliceSiteRegionEnd(int size) {
 		if (spliceSiteRegionEnd != null) return spliceSiteRegionEnd;
@@ -125,9 +140,6 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 
 	/**
 	 * Create splice site regions
-	 * @param sizeExon
-	 * @param sizeIntron
-	 * @return
 	 */
 	public SpliceSiteRegion createSpliceSiteRegionStart(int size) {
 		if (spliceSiteRegionStart != null) return spliceSiteRegionStart;
@@ -218,30 +230,29 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 
 	/**
 	 * Check that the base in the exon corresponds with the one in the SNP
-	 * @param seqChange
 	 */
-	public ErrorWarningType sanityCheck(Variant seqChange) {
-		if (!intersects(seqChange)) return null;
+	public ErrorWarningType sanityCheck(Variant variant) {
+		if (!intersects(variant)) return null;
 
 		// Only makes sense for SNPs and MNPs
-		if ((seqChange.getChangeType() != VariantType.SNP) && (seqChange.getChangeType() != VariantType.MNP)) return null;
+		if ((variant.getVariantType() != VariantType.SNP) && (variant.getVariantType() != VariantType.MNP)) return null;
 
-		int mstart = Math.max(seqChange.getStart(), start);
+		int mstart = Math.max(variant.getStart(), start);
 		int idxStart = mstart - start;
 
 		if (sequence.length() <= 0) return ErrorWarningType.WARNING_SEQUENCE_NOT_AVAILABLE;
 		if (idxStart >= sequence.length()) return ErrorWarningType.ERROR_OUT_OF_EXON;
 
-		int mend = Math.min(seqChange.getEnd(), end);
+		int mend = Math.min(variant.getEnd(), end);
 		int len = mend - mstart + 1;
 
 		String realReference = basesAt(idxStart, len).toUpperCase();
 
-		int chRefStart = mstart - seqChange.getStart();
+		int chRefStart = mstart - variant.getStart();
 		if (chRefStart < 0) return ErrorWarningType.ERROR_OUT_OF_EXON;
 
-		int chRefEnd = mend - seqChange.getStart();
-		String refStr = seqChange.reference();
+		int chRefEnd = mend - variant.getStart();
+		String refStr = variant.reference();
 		if (chRefEnd >= refStr.length()) return ErrorWarningType.ERROR_OUT_OF_EXON;
 
 		String changeReference = refStr.substring(chRefStart, chRefEnd + 1);
@@ -255,8 +266,6 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 
 	/**
 	 * Parse a line from a serialized file
-	 * @param line
-	 * @return
 	 */
 	@Override
 	public void serializeParse(MarkerSerializer markerSerializer) {
@@ -287,12 +296,11 @@ public class Exon extends MarkerSeq implements MarkerWithFrame {
 				+ "\t" + ssdId //
 				+ "\t" + ssaId //
 				+ "\t" + (spliceType != null ? spliceType.toString() : "")//
-		;
+				;
 	}
 
 	/**
 	 * Frame can be {-1, 0, 1, 2}, where '-1' means unknown
-	 * @param frame
 	 */
 	@Override
 	public void setFrame(int frame) {

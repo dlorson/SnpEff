@@ -1,41 +1,63 @@
 package ca.mcgill.mcb.pcingola.snpEffect.testCases;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import junit.framework.TestCase;
-import ca.mcgill.mcb.pcingola.interval.Chromosome;
-import ca.mcgill.mcb.pcingola.interval.Genome;
-import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.interval.Variant.VariantType;
-import ca.mcgill.mcb.pcingola.snpEffect.Config;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+
+import org.junit.Assert;
+
+import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
+import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
+import ca.mcgill.mcb.pcingola.util.Gpr;
+import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
- * 
+ *
  * Test case
- * 
- * @author pcingola
  */
 public class TestCasesZzz extends TestCase {
 
-	boolean debug = false;
+	boolean debug = true;
 	boolean verbose = false || debug;
 
-	Config config;
-	Genome genome;
+	public TestCasesZzz() {
+		super();
+	}
 
 	/**
-	 * Make sure all variant effects have appropriate impacts
+	 * Calculate snp effect for an input VCF file
 	 */
-	public void test_36_EffectImpact() {
-		Chromosome chr = new Chromosome(null, 0, 1, "1");
-		Variant var = new Variant(chr, 1, "A", "C");
-		var.setChangeType(VariantType.SNP);
-
-		System.out.println(var);
-		for (EffectType eff : EffectType.values()) {
-			VariantEffect varEff = new VariantEffect(var);
-			varEff.setEffectType(eff);
-			System.out.println(var.isVariant() + "\t" + eff + "\t" + varEff.getEffectImpact());
+	public List<VcfEntry> snpEffect(String genome, String vcfFile, String otherArgs[]) {
+		// Arguments
+		ArrayList<String> args = new ArrayList<String>();
+		if (otherArgs != null) {
+			for (String a : otherArgs)
+				args.add(a);
 		}
+		args.add(genome);
+		args.add(vcfFile);
+
+		SnpEff cmd = new SnpEff(args.toArray(new String[0]));
+		SnpEffCmdEff cmdEff = (SnpEffCmdEff) cmd.snpEffCmd();
+		cmdEff.setVerbose(verbose);
+		cmdEff.setSupressOutput(!verbose);
+
+		// Run command
+		List<VcfEntry> list = cmdEff.run(true);
+		return list;
 	}
+
+	/**
+	 * Test an MNP at the end of the transcript: We should be able to annotate without throwing any error
+	 */
+	public void test_04() {
+		Gpr.debug("Test");
+		String args[] = {};
+		List<VcfEntry> list = snpEffect("testHg3775Chr10", "tests/mnp_deletion.vcf", args);
+
+		// We should be able to annotate this entry (if INFO is empty, something went wrong)
+		Assert.assertFalse(list.get(0).getInfoStr().isEmpty());
+	}
+
 }

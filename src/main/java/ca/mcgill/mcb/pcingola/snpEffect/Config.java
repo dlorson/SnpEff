@@ -32,6 +32,7 @@ public class Config implements Serializable, Iterable<String> {
 	public static int MAX_WARNING_COUNT = 20;
 
 	// Keys in properties file
+	public static final String KEY_BUNDLE_SUFIX = ".bundle";
 	public static final String KEY_CODON_PREFIX = "codon.";
 	public static final String KEY_CODONTABLE_SUFIX = ".codonTable";
 	public static final String KEY_DATA_DIR = "data.dir";
@@ -62,6 +63,7 @@ public class Config implements Serializable, Iterable<String> {
 	HashMap<String, Genome> genomeByVersion;
 	HashMap<String, String> referenceByVersion;
 	HashMap<String, String> nameByVersion;
+	HashMap<String, String> bundleByGenome;
 	SnpEffectPredictor snpEffectPredictor;
 	String databaseRepository = "";
 	String versionsUrl = "";
@@ -82,7 +84,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Create a config (uses DEFAULT_CONFIG_FILE)
-	 * @param genomeVersion
 	 */
 	public Config(String genomeVersion) {
 		init(genomeVersion, DEFAULT_CONFIG_FILE, null);
@@ -90,8 +91,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Create a configuration from 'configFileName'
-	 * @param genomeVersion
-	 * @param configFileName
 	 */
 	public Config(String genomeVersion, String configFileName) {
 		init(genomeVersion, configFileName, null);
@@ -99,8 +98,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Create a configuration from 'configFileName'
-	 * @param genomeVersion
-	 * @param configFileName
 	 */
 	public Config(String genomeVersion, String configFileName, String dataDir) {
 		init(genomeVersion, configFileName, dataDir);
@@ -124,8 +121,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Extract and create codon tables
-	 * @param genomeVersion
-	 * @param properties
 	 */
 	void createCodonTables(String genomeVersion, Properties properties) {
 		//---
@@ -169,7 +164,7 @@ public class Config implements Serializable, Iterable<String> {
 				}
 
 				// Everything seems to be OK, go on
-				CodonTables.getInstance().add(genomeByVersion.get(genomeVersion), chr, codonTable);
+				CodonTables.getInstance().set(genomeByVersion.get(genomeVersion), chr, codonTable);
 			}
 		}
 	}
@@ -193,7 +188,11 @@ public class Config implements Serializable, Iterable<String> {
 			StringBuilder urlsb = new StringBuilder();
 			urlsb.append(urlRoot);
 			if (urlsb.charAt(urlRoot.length() - 1) != '/') urlsb.append("/");
-			urlsb.append("v" + version + "/snpEff_v" + version + "_" + genomeVer + ".zip");
+
+			// It is in a bundle?
+			String bundleName = getBundleName(genomeVer);
+			if (bundleName != null) urlsb.append("v" + version + "/snpEff_v" + version + "_" + bundleName + ".zip");
+			else urlsb.append("v" + version + "/snpEff_v" + version + "_" + genomeVer + ".zip");
 
 			return new URL(urlsb.toString());
 		} catch (MalformedURLException e) {
@@ -213,7 +212,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Genes file path (no extension)
-	 * @return
 	 */
 	public String getBaseFileNameGenes() {
 		return dataDir + "/" + genome.getVersion() + "/genes";
@@ -225,10 +223,16 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Regulation file (GFF format)
-	 * @return
 	 */
 	public String getBaseFileNameRegulation() {
 		return getDirDataVersion() + "/regulation";
+	}
+
+	/**
+	 * Is this genome packed in a bundle?
+	 */
+	public String getBundleName(String genomeVer) {
+		return bundleByGenome.get(genomeVer);
 	}
 
 	/**
@@ -263,7 +267,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Main data directory
-	 * @return
 	 */
 	public String getDirData() {
 		return dataDir;
@@ -271,7 +274,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Data dir for a specific genome version (i.e. where the database is)
-	 * @return
 	 */
 	public String getDirDataVersion() {
 		return dataDir + "/" + genome.getVersion();
@@ -279,7 +281,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Main dir
-	 * @return
 	 */
 	public String getDirMain() {
 		File dir = new File(dataDir);
@@ -288,7 +289,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Directory where regulation 'BED' files are
-	 * @return
 	 */
 	public String getDirRegulationBed() {
 		return getDirDataVersion() + "/regulation.bed/";
@@ -296,8 +296,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Get a property as a double
-	 * @param propertyName
-	 * @return
 	 */
 	protected double getDouble(String propertyName, double defaultValue) {
 		String val = getString(propertyName);
@@ -307,7 +305,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Filenames for reference sequence (fasta files)
-	 * @return
 	 */
 	public List<String> getFileListGenomeFasta() {
 		ArrayList<String> files = new ArrayList<String>();
@@ -323,7 +320,6 @@ public class Config implements Serializable, Iterable<String> {
 	/**
 	 * Filename for reference sequence (fasta file)
 	 * Scans the list of files 'getFileListGenomeFasta()' and finds the first file that exists
-	 * @return
 	 */
 	public String getFileNameGenomeFasta() {
 		for (String f : getFileListGenomeFasta()) {
@@ -359,8 +355,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Get a property as a long
-	 * @param propertyName
-	 * @return
 	 */
 	protected long getLong(String propertyName, long defaultValue) {
 		String val = getString(propertyName);
@@ -378,7 +372,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Get the relative path to a config file
-	 * @return
 	 */
 	String getRelativeConfigPath() {
 		URL url = Config.class.getProtectionDomain().getCodeSource().getLocation();
@@ -396,8 +389,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Get a property as a string
-	 * @param propertyName
-	 * @return
 	 */
 	protected String getString(String propertyName) {
 		return properties.getProperty(propertyName);
@@ -409,8 +400,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Create a configuration from 'configFileName'
-	 * @param genomeVersion
-	 * @param configFileName
 	 */
 	void init(String genomeVersion, String configFileName, String dataDir) {
 		treatAllAsProteinCoding = false;
@@ -466,7 +455,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Read configuration file and create all 'genomes'
-	 * @return
 	 */
 	private void readConfig(String genomeVersion, String configFileName) {
 		//---
@@ -513,13 +501,28 @@ public class Config implements Serializable, Iterable<String> {
 			if (key.endsWith(KEY_GENOME_SUFIX)) {
 				String genVer = key.substring(0, key.length() - KEY_GENOME_SUFIX.length());
 
-				// Add full namne
+				// Add full name
 				String name = properties.getProperty(genVer + KEY_GENOME_SUFIX);
 				nameByVersion.put(genVer, name);
 
 				// Add reference
 				String ref = properties.getProperty(genVer + KEY_REFERENCE_SUFIX);
 				referenceByVersion.put(genVer, ref);
+			}
+		}
+
+		//---
+		// Find all bundles
+		//---
+		bundleByGenome = new HashMap<String, String>();
+		for (String key : keys) {
+			if (key.endsWith(KEY_BUNDLE_SUFIX)) {
+				String bundleName = key.substring(0, key.length() - KEY_BUNDLE_SUFIX.length());
+				String entries = properties.getProperty(key);
+				for (String gen : entries.split("\\s+")) {
+					gen = gen.trim();
+					bundleByGenome.put(gen, bundleName);
+				}
 			}
 		}
 
@@ -539,9 +542,6 @@ public class Config implements Serializable, Iterable<String> {
 	/**
 	 * Read a config file for a given genome version (dataDir/genVer/snpEff.config)
 	 * Add all properties found to 'properties'
-	 *
-	 * @param genVer
-	 * @param properties
 	 */
 	void readGenomeConfig(String genVer, Properties properties) {
 		String genomePropsFileName = dataDir + "/" + genVer + "/snpEff.config";
@@ -569,7 +569,6 @@ public class Config implements Serializable, Iterable<String> {
 
 	/**
 	 * Reads a properties file
-	 * @param configFileName
 	 * @return The path where config file is located
 	 */
 	String readProperties(String configFileName) {

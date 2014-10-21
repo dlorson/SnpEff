@@ -1,5 +1,6 @@
 package ca.mcgill.mcb.pcingola.snpEffect.testCases;
 
+import java.util.List;
 import java.util.Random;
 
 import junit.framework.Assert;
@@ -11,21 +12,32 @@ import ca.mcgill.mcb.pcingola.interval.Gene;
 import ca.mcgill.mcb.pcingola.interval.Genome;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectImpact;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
+import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEff;
+import ca.mcgill.mcb.pcingola.snpEffect.commandLine.SnpEffCmdEff;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.util.GprSeq;
+import ca.mcgill.mcb.pcingola.vcf.VcfEffect;
+import ca.mcgill.mcb.pcingola.vcf.VcfEntry;
 
 /**
- * Test random SNP changes 
- * 
+ * Test random SNP changes
+ *
  * @author pcingola
  */
 public class TestCasesSnp extends TestCase {
 
 	boolean debug = false;
+	boolean verbose = false || debug;
+
+	public static int N = 1000;
+
 	Random rand;
 	Config config;
 	Genome genome;
@@ -39,6 +51,13 @@ public class TestCasesSnp extends TestCase {
 	public TestCasesSnp() {
 		super();
 		init();
+	}
+
+	String effectStr(VariantEffect effect) {
+		String effStr = effect.effect(true, true, true, false);
+		String aaStr = effect.getAaChangeOld();
+		int idx = effStr.indexOf('(');
+		return effStr.substring(0, idx) + "(" + aaStr + ")";
 	}
 
 	void init() {
@@ -85,7 +104,7 @@ public class TestCasesSnp extends TestCase {
 	}
 
 	public void test_01() {
-		int N = 1000;
+		Gpr.debug("Test");
 		CodonTable codonTable = genome.codonTable();
 
 		// Test N times
@@ -95,7 +114,8 @@ public class TestCasesSnp extends TestCase {
 		for (int i = 0; i < N; i++) {
 			initSnpEffPredictor();
 			if (debug) System.out.println("SNP Test iteration: " + i + "\n" + transcript);
-			else System.out.println("SNP Test iteration: " + i + "\t" + transcript.getStrand() + "\t" + transcript.cds());
+			else if (verbose) System.out.println("SNP Test iteration: " + i + "\t" + transcript.getStrand() + "\t" + transcript.cds());
+			else Gpr.showMark(i + 1, 1);
 
 			int cdsBaseNum = 0;
 
@@ -152,12 +172,12 @@ public class TestCasesSnp extends TestCase {
 							snp = GprSeq.wc(snp);
 							refBase = GprSeq.wc(refBase);
 						}
-						Variant seqChange = new Variant(chromosome, pos, refBase + "", snp + "", "");
+						Variant variant = new Variant(chromosome, pos, refBase + "", snp + "", "");
 
-						if (!seqChange.isVariant()) effectExpected = "EXON";
+						if (!variant.isVariant()) effectExpected = "EXON";
 
 						// Calculate effects
-						VariantEffects effects = snpEffectPredictor.variantEffect(seqChange);
+						VariantEffects effects = snpEffectPredictor.variantEffect(variant);
 
 						// There should be only one effect
 						if (debug) System.out.println(effects);
@@ -166,10 +186,10 @@ public class TestCasesSnp extends TestCase {
 						// Show
 						if (effects.size() == 1) {
 							VariantEffect effect = effects.get();
-							String effStr = effect.effect(true, true, true, false);
+							String effStr = effectStr(effect);
 							if (debug) System.out.println("\tPos: " + pos //
 									+ "\tCDS base num: " + cdsBaseNum + " [" + cdsCodonNum + ":" + cdsCodonPos + "]" //
-									+ "\t" + seqChange + (seqChange.isStrandPlus() ? "+" : "-") //
+									+ "\t" + variant + (variant.isStrandPlus() ? "+" : "-") //
 									+ "\tCodon: " + codon + " -> " + newCodon //
 									+ "\tAA: " + aa + " -> " + newAa //
 									+ "\tEffect: " + effStr);
@@ -182,4 +202,30 @@ public class TestCasesSnp extends TestCase {
 			}
 		}
 	}
+
+	/**
+	 * Stop gained should have 'HIGH' impact
+	 */
+	public void test_02_StopGained_HighImpact() {
+		Gpr.debug("Test");
+		String genome = "testHg3775Chr2";
+		String vcf = "tests/stop_gained_chr2.vcf";
+
+		String args[] = { "-noLog", genome, vcf };
+		SnpEff snpEff = new SnpEff(args);
+		snpEff.setVerbose(verbose);
+		snpEff.setSupressOutput(!verbose);
+		snpEff.setDebug(debug);
+
+		SnpEffCmdEff seff = (SnpEffCmdEff) snpEff.snpEffCmd();
+		List<VcfEntry> vcfEntries = seff.run(true);
+		for (VcfEntry ve : vcfEntries) {
+			if (verbose) System.out.println(ve);
+			for (VcfEffect veff : ve.parseEffects()) {
+				if (verbose) System.out.println("\t\t" + veff);
+				if (veff.getEffectType() == EffectType.STOP_GAINED) Assert.assertEquals(EffectImpact.HIGH, veff.getImpact());
+			}
+		}
+	}
+
 }

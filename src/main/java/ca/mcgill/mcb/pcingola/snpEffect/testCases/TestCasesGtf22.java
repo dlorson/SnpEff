@@ -16,10 +16,12 @@ import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
  * Test case for GTF22 file parsing
- * 
+ *
  * @author pcingola
  */
 public class TestCasesGtf22 extends TestCase {
+
+	boolean verbose = false;
 
 	public TestCasesGtf22() {
 		super();
@@ -28,9 +30,6 @@ public class TestCasesGtf22 extends TestCase {
 
 	/**
 	 * Build a genome from a GTF file and compare results to 'expected' results
-	 * @param genome
-	 * @param gtf22
-	 * @param resultFile
 	 */
 	public void buildAndCompare(String genome, String gtf22, String fastaFile, String resultFile) {
 		String expectedResult = Gpr.readFile(resultFile).trim();
@@ -39,6 +38,7 @@ public class TestCasesGtf22 extends TestCase {
 		Config config = new Config(genome, Config.DEFAULT_CONFIG_FILE);
 		SnpEffPredictorFactoryGtf22 fgtf22 = new SnpEffPredictorFactoryGtf22(config);
 		fgtf22.setFileName(gtf22);
+		fgtf22.setVerbose(verbose);
 
 		// Set fasta file (or don't read sequences)
 		if (fastaFile != null) fgtf22.setFastaFile(fastaFile);
@@ -48,14 +48,12 @@ public class TestCasesGtf22 extends TestCase {
 
 		// Compare result
 		String result = show(sep.getGenome()).trim();
-		System.out.println(result);
+		if (verbose) System.out.println(result);
 		Assert.assertEquals(Gpr.noSpaces(expectedResult), Gpr.noSpaces(result));
 	}
 
 	/**
 	 * Show a genome in a 'standard' way
-	 * @param genome
-	 * @return
 	 */
 	String show(Genome genome) {
 		StringBuilder sb = new StringBuilder();
@@ -86,6 +84,7 @@ public class TestCasesGtf22 extends TestCase {
 	}
 
 	public void testCaseHg37_61_ENST00000250838() {
+		Gpr.debug("Test");
 		String genome = "testHg37.61";
 		String gtfFile = "tests/ENST00000250838.gtf";
 		String fastaFile = "tests/chrY.fa.gz";
@@ -94,6 +93,7 @@ public class TestCasesGtf22 extends TestCase {
 	}
 
 	public void testCaseHg37_61_ENST00000331397() {
+		Gpr.debug("Test");
 		String genome = "testHg37.61";
 		String gtfFile = "tests/ENST00000331397.gtf22";
 		String fastaFile = "tests/chrY.fa.gz";
@@ -102,6 +102,7 @@ public class TestCasesGtf22 extends TestCase {
 	}
 
 	public void testCaseMm37_61_ENSMUSG00000051951() {
+		Gpr.debug("Test");
 		String genome = "testMm37.61";
 		String gtfFile = "tests/ENSMUSG00000051951.gtf";
 		String resultFile = "tests/ENSMUSG00000051951.txt";
@@ -109,6 +110,7 @@ public class TestCasesGtf22 extends TestCase {
 	}
 
 	public void testCaseMm37_61_ENSMUST00000070533() {
+		Gpr.debug("Test");
 		String genome = "testMm37.61";
 		String gtfFile = "tests/ENSMUST00000070533.gtf";
 		String resultFile = "tests/ENSMUST00000070533.txt";

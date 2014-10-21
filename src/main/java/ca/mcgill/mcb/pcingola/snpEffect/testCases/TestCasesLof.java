@@ -8,26 +8,28 @@ import junit.framework.TestCase;
 import net.sf.samtools.util.RuntimeEOFException;
 import ca.mcgill.mcb.pcingola.interval.Exon;
 import ca.mcgill.mcb.pcingola.interval.Gene;
+import ca.mcgill.mcb.pcingola.interval.Intron;
 import ca.mcgill.mcb.pcingola.interval.Marker;
 import ca.mcgill.mcb.pcingola.interval.Markers;
 import ca.mcgill.mcb.pcingola.interval.SpliceSite;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
 import ca.mcgill.mcb.pcingola.interval.Variant.VariantType;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.LossOfFunction;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
  * Test Loss of Function prediction
- * 
+ *
  * @author pcingola
  */
 public class TestCasesLof extends TestCase {
 
 	public static boolean debug = false;
+	public static boolean verbose = false;
 	public static final int NUM_DEL_TEST = 10; // number of random test per transcript
 
 	Config config;
@@ -45,14 +47,10 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Create change effects
-	 * @param seqChange
-	 * @param effectType
-	 * @param exon
-	 * @return
 	 */
-	LinkedList<VariantEffect> changeEffects(Variant seqChange, EffectType effectType, Marker marker) {
-		VariantEffect changeEffect = new VariantEffect(seqChange);
-		changeEffect.set(marker, effectType, "");
+	LinkedList<VariantEffect> changeEffects(Variant variant, EffectType effectType, Marker marker) {
+		VariantEffect changeEffect = new VariantEffect(variant);
+		changeEffect.set(marker, effectType, effectType.effectImpact(), "");
 		LinkedList<VariantEffect> changeEffects = new LinkedList<VariantEffect>();
 		changeEffects.add(changeEffect);
 		return changeEffects;
@@ -61,8 +59,6 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Check that LOF works for a given transcript
-	 * @param gene
-	 * @param tr
 	 */
 	void checkLof(Transcript tr) {
 		// Don't check non-protein coding
@@ -76,7 +72,6 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Check that exon deleted is LOF
-	 * @param tr
 	 */
 	void checkLofExonDeleted(Transcript tr) {
 		// First coding exont
@@ -88,15 +83,14 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * First coding exon produces a LOF
-	 * @param tr
 	 */
 	void checkLofExonDeletedFirstExon(Transcript tr) {
 		Exon ex = tr.getFirstCodingExon();
 		Variant seqChange = new Variant(tr.getChromosome(), ex.getStart(), "AC", "A");
 		seqChange.setStart(ex.getStart());
 		seqChange.setEnd(ex.getEnd());
-		seqChange.setChangeType(VariantType.DEL);
-		if (debug) Gpr.debug("SeqChange:" + seqChange);
+		seqChange.setVariantType(VariantType.DEL);
+		if (verbose) Gpr.debug("SeqChange:" + seqChange);
 		LinkedList<VariantEffect> changeEffects = changeEffects(seqChange, EffectType.EXON_DELETED, ex);
 
 		// Calculate LOF
@@ -107,7 +101,6 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * If more than half protein is lost => LOF
-	 * @param tr
 	 */
 	void checkLofExonDeletedHalf(Transcript tr) {
 		// Calculate coding part of the transcript
@@ -120,8 +113,8 @@ public class TestCasesLof extends TestCase {
 			Variant seqChange = new Variant(tr.getChromosome(), delStart, "AC", "A");
 			seqChange.setStart(delStart);
 			seqChange.setEnd(delEnd);
-			if (debug) Gpr.debug("SeqChange:" + seqChange);
-			seqChange.setChangeType(VariantType.DEL);
+			if (verbose) Gpr.debug("SeqChange:" + seqChange);
+			seqChange.setVariantType(VariantType.DEL);
 
 			// How many coding bases are affected?
 			Marker codingDel = cds.intersect(seqChange);
@@ -145,7 +138,6 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Frame shifts are LOF
-	 * @param tr
 	 */
 	void checkLofFrameShift(Transcript tr) {
 		Marker cds = cdsMarker(tr);
@@ -163,8 +155,8 @@ public class TestCasesLof extends TestCase {
 				boolean ins = random.nextBoolean(); // Randomly choose INS or DEL
 				if (ins) seqChange = new Variant(tr.getChromosome(), pos, "A", "AC");
 				else seqChange = new Variant(tr.getChromosome(), pos, "AC", "A");
-				seqChange.setChangeType(ins ? VariantType.INS : VariantType.DEL);
-				if (debug) Gpr.debug("SeqChange:" + seqChange);
+				seqChange.setVariantType(ins ? VariantType.INS : VariantType.DEL);
+				if (verbose) Gpr.debug("SeqChange:" + seqChange);
 
 				// Create change effect
 				LinkedList<VariantEffect> changeEffects = changeEffects(seqChange, EffectType.FRAME_SHIFT, ex);
@@ -190,23 +182,20 @@ public class TestCasesLof extends TestCase {
 
 	void checkLofSplice(Transcript tr) {
 		// All transcripts in exon
-		int exonNum = 0;
-		for (Exon ex : tr.sortedStrand()) {
-			checkSpliceDonor(tr, ex, exonNum);
-			checkSpliceAcceptor(tr, ex, exonNum);
-			exonNum++;
+		for (Intron intron : tr.introns()) {
+			checkSpliceDonor(tr, intron);
+			checkSpliceAcceptor(tr, intron);
 		}
 	}
 
 	/**
 	 * Check that START_LOST is LOF
-	 * @param tr
 	 */
 	void checkLofStartLost(Transcript tr) {
 		// Find start codon position
 		int pos = tr.getCdsStart();
 		Variant seqChange = new Variant(tr.getChromosome(), pos, "A", "C"); // Create a seqChange
-		if (debug) Gpr.debug("SeqChange:" + seqChange);
+		if (verbose) Gpr.debug("SeqChange:" + seqChange);
 
 		// Finr exon
 		Exon exon = null;
@@ -223,22 +212,18 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Check that Core Splice Site acceptors are considered LOF
-	 * @param tr
-	 * @param ex
-	 * @param exonNum
 	 */
-	void checkSpliceAcceptor(Transcript tr, Exon ex, int exonNum) {
-		int step = tr.isStrandPlus() ? -1 : +1;
-		int intronNum = exonNum - 1; // We care about the intron before
+	void checkSpliceAcceptor(Transcript tr, Intron intron) {
+		int step = tr.isStrandPlus() ? +1 : -1;
 
-		if (ex.getRank() > 1) {
+		if (intron.getRank() > 1) {
 			// Position
-			int posDonor = tr.isStrandPlus() ? ex.getStart() : ex.getEnd();
-			posDonor += step;
+			int posDonor = tr.isStrandPlus() ? intron.getEnd() : intron.getStart();
 
 			// Splice site size
-			int maxSize = Math.min(tr.intronSize(intronNum), SpliceSite.CORE_SPLICE_SITE_SIZE);
-			if (debug) Gpr.debug("Intron size: " + tr.intronSize(intronNum));
+			int maxSize = Math.min(intron.size(), SpliceSite.CORE_SPLICE_SITE_SIZE);
+			posDonor -= step * (maxSize - 1);
+			if (verbose) Gpr.debug("Intron size: " + intron.size());
 			if (maxSize <= 0) throw new RuntimeEOFException("Max splice size is " + maxSize);
 
 			//---
@@ -246,9 +231,9 @@ public class TestCasesLof extends TestCase {
 			//---
 			for (int pos = posDonor, i = 0; i < maxSize; i++, pos += step) {
 				Variant seqChange = new Variant(tr.getChromosome(), pos, "A", "C"); // Create a seqChange
-				Marker marker = findMarker(seqChange, EffectType.SPLICE_SITE_ACCEPTOR, null, ex);
+				Marker marker = findMarker(seqChange, EffectType.SPLICE_SITE_ACCEPTOR, null, intron);
 				LinkedList<VariantEffect> changeEffects = changeEffects(seqChange, EffectType.SPLICE_SITE_ACCEPTOR, marker); // Create a SPLICE_SITE_ACCEPTOR effect
-				if (debug) Gpr.debug("SeqChange:" + seqChange);
+				if (verbose) Gpr.debug("SeqChange:" + seqChange);
 
 				// Create a LOF object and analyze the effect
 				LossOfFunction lof = new LossOfFunction(config, changeEffects);
@@ -261,33 +246,29 @@ public class TestCasesLof extends TestCase {
 
 	/**
 	 * Check that Core Splice Donor acceptors are considered LOF
-	 * @param tr
-	 * @param ex
-	 * @param exonNum
 	 */
-	void checkSpliceDonor(Transcript tr, Exon ex, int exonNum) {
+	void checkSpliceDonor(Transcript tr, Intron intron) {
 		int step = tr.isStrandPlus() ? 1 : -1;
 		int maxRank = tr.numChilds();
-		int intronNum = exonNum; // We care about the intron before
 
-		if (ex.getRank() < maxRank) {
+		if (intron.getRank() < maxRank) {
 			// Position
-			int posDonor = tr.isStrandPlus() ? ex.getEnd() : ex.getStart();
-			posDonor += step;
+			int posDonor = tr.isStrandPlus() ? intron.getStart() : intron.getEnd();
 
 			// Splice site size
-			int maxSize = Math.min(tr.intronSize(intronNum), SpliceSite.CORE_SPLICE_SITE_SIZE);
-			if (debug) Gpr.debug("Intron size: " + tr.intronSize(intronNum));
+			int maxSize = Math.min(intron.size(), SpliceSite.CORE_SPLICE_SITE_SIZE);
+			if (verbose) Gpr.debug("Intron size: " + intron.size());
 			if (maxSize <= 0) throw new RuntimeEOFException("Max splice size is " + maxSize);
 
 			//---
 			// For all position on splice site donor positions, make sure it is LOF
 			//---
 			for (int pos = posDonor, i = 0; i < maxSize; i++, pos += step) {
-				Variant seqChange = new Variant(tr.getChromosome(), pos, "A", "C"); // Create a seqChange
-				Marker marker = findMarker(seqChange, EffectType.SPLICE_SITE_DONOR, null, ex);
-				LinkedList<VariantEffect> changeEffects = changeEffects(seqChange, EffectType.SPLICE_SITE_DONOR, marker); // Create a SPLICE_DONOR effect
-				if (debug) Gpr.debug("SeqChange:" + seqChange);
+				if (verbose) Gpr.debug("Position: " + tr.getChromosome() + ":" + posDonor);
+				Variant variant = new Variant(tr.getChromosome(), pos, "A", "C"); // Create a seqChange
+				Marker marker = findMarker(variant, EffectType.SPLICE_SITE_DONOR, null, intron);
+				LinkedList<VariantEffect> changeEffects = changeEffects(variant, EffectType.SPLICE_SITE_DONOR, marker); // Create a SPLICE_DONOR effect
+				if (verbose) Gpr.debug("SeqChange:" + variant);
 
 				// Create a LOF object and analyze the effect
 				LossOfFunction lof = new LossOfFunction(config, changeEffects);
@@ -299,19 +280,27 @@ public class TestCasesLof extends TestCase {
 	}
 
 	/**
-	 * Find a marker that intersects seqChange
-	 * @return
+	 * Find a marker that intersects variant
 	 */
-	Marker findMarker(Variant seqChange, EffectType effectType, Transcript tr, Exon exon) {
-		Markers markers = config.getSnpEffectPredictor().query(seqChange);
+	Marker findMarker(Variant variant, EffectType effectType, Transcript tr, Marker markerFilter) {
+		Markers markers = config.getSnpEffectPredictor().query(variant);
+
 		for (Marker m : markers) {
-			Exon mex = (Exon) m.findParent(Exon.class);
+			Marker mfilter = null;
+			if (markerFilter != null) mfilter = (Marker) m.findParent(markerFilter.getClass());
+
 			Transcript mtr = (Transcript) m.findParent(Transcript.class);
 
-			if ((m.getType() == effectType) && (mex != null) && (mtr != null)) {
-				if (exon != null) {
+			if (debug) Gpr.debug("\tLooking for '" + effectType + "' in " + (markerFilter != null ? markerFilter.getId() : "NULL") //
+					+ ", class: " + (markerFilter != null ? markerFilter.getClass().getSimpleName() : "") //
+					+ "\t\tFound: '" + m.getType() + "', mfilter: " + (mfilter != null ? mfilter.getId() : "NULL") //
+					+ ", parent: " + m.getParent().getClass().getSimpleName() // 
+			);
+
+			if ((m.getType() == effectType) && (mfilter != null) && (mtr != null)) {
+				if (markerFilter != null) {
 					// Exon filter?
-					if (mex.getId().equals(exon.getId())) return m;
+					if (mfilter.getId().equals(markerFilter.getId())) return m;
 				} else if (tr != null) {
 					// Transcript filter?
 					if (mtr.getId().equals(tr.getId())) return m;
@@ -319,16 +308,16 @@ public class TestCasesLof extends TestCase {
 			}
 		}
 
-		throw new RuntimeEOFException("Cannot find '" + effectType + "' " + (exon != null ? "for exon " + exon.getId() : "") + ", seqChange: " + seqChange);
+		throw new RuntimeEOFException("Cannot find '" + effectType + "' " + (markerFilter != null ? "for exon " + markerFilter.getId() : "") + ", seqChange: " + variant);
 	}
 
 	public void test_01() {
+		Gpr.debug("Test");
+
 		// Load database
 		String genomeVer = "testHg3766Chr1";
-		Gpr.debug("Loading database '" + genomeVer + "'");
 		config = new Config(genomeVer, Config.DEFAULT_CONFIG_FILE);
 		config.loadSnpEffectPredictor();
-		Gpr.debug("Building forest");
 		config.setTreatAllAsProteinCoding(true); // For historical reasons...
 		config.getSnpEffectPredictor().buildForest();
 
@@ -338,9 +327,22 @@ public class TestCasesLof extends TestCase {
 		for (Gene gene : config.getGenome().getGenes()) {
 			Gpr.showMark(i++, 1);
 			for (Transcript tr : gene) {
-				if (debug) System.err.println(tr);
+				if (verbose) System.err.println(tr);
 				checkLof(tr);
 			}
 		}
 	}
+
+	//	/**
+	//	 * We should be able to annotate a BED file
+	//	 */
+	//	public void test_02() {
+	//		String args[] = { "testHg3775Chr22", "-noLog", "-i", "bed", "tests/test_lof_02.bed" };
+	//		SnpEff snpeff = new SnpEff(args);
+	//		snpeff.setVerbose(verbose);
+	//		snpeff.setSupressOutput(!verbose);
+	//		boolean ok = snpeff.run();
+	//		Assert.assertEquals(true, ok);
+	//	}
+
 }

@@ -244,8 +244,6 @@ public abstract class SnpEffPredictorFactory {
 
 	/**
 	 * Get (or create) a chromosome and set it's length
-	 * @param chromoName
-	 * @param len
 	 */
 	void chromoLen(String chromoName, int len) {
 		Chromosome chromo = getOrCreateChromosome(chromoName);
@@ -278,7 +276,8 @@ public abstract class SnpEffPredictorFactory {
 		for (Gene gene : genome.getGenes())
 			for (Transcript tr : gene) {
 				if (tr.getCds() != null && !tr.getCds().isEmpty()) {
-					if (!tr.isProteinCoding()) {
+					// If transcript doesn't have protein coding flag set (and doesn't have biotype information), use CDS as a proxy for 'protein coding'
+					if (!tr.isProteinCoding() && (tr.getBioType() == null || tr.getBioType().isEmpty())) {
 						tr.setProteinCoding(true);
 						i++;
 						if (debug) System.err.println("\t\tMarking as protein coding transcript " + tr.getId());
@@ -363,7 +362,6 @@ public abstract class SnpEffPredictorFactory {
 
 	/**
 	 * Error: Throw a runtime exception (show some details)
-	 * @param msg
 	 */
 	void error(String msg) {
 		throw new RuntimeException("FATAL ERROR: " + msg + ". File '" + fileName + "' line " + lineNum + "\n\t'" + line + "'\n");
@@ -371,7 +369,6 @@ public abstract class SnpEffPredictorFactory {
 
 	/**
 	 * Error: Throw a runtime exception (show some details)
-	 * @param msg
 	 */
 	void error(String msg, Throwable t) {
 		throw new RuntimeException("FATAL ERROR: " + msg + ". File '" + fileName + "' line " + lineNum + "\n\t'" + line + "'\n", t);
@@ -551,8 +548,6 @@ public abstract class SnpEffPredictorFactory {
 
 	/**
 	 * Get a chromosome. If it doesn't exist, create it
-	 * @param chromoName
-	 * @return
 	 */
 	protected Chromosome getOrCreateChromosome(String chromoName) {
 		Chromosome chromo = genome.getChromosome(chromoName);

@@ -1,0 +1,474 @@
+#!/usr/bin/env bds
+
+#-------------------------------------------------------------------------------
+#
+# Create databases
+#
+#-------------------------------------------------------------------------------
+
+
+# Commands
+snpeff				:= "java -Xmx10G -jar snpEff.jar "
+snpeffXl			:= "java -Xmx50G -jar snpEff.jar "
+snpeffBuild			:= "$snpeff build -v"
+snpsift				:= "java -jar SnpSift.jar "
+
+# Directories
+dirSnpeff			:="$HOME/snpEff"
+dirData				:="$dirSnpeff/data"
+dirDownload			:="$dirSnpeff/download"
+dirZip				:="$dirSnpeff/zip"
+dirBuild			:="$dirSnpeff/build"
+dirDb				:="$dirSnpeff/db"
+dirDarned			:="$dirDb/darned/"
+pwmsBin				:="$dirDb/jaspar/pwms.bin"
+zipGenome			:=""
+
+# URLs
+snpeffDownload		:= "http://sourceforge.net/projects/snpeff/files/snpEff_latest_core.zip"
+
+# Command line options
+bundleLists			:= false		# Create bundle lists and config entries
+config				:= false		# Create config file
+db					:= false		# Build databases
+distro	 			:= false		# Create distribution files (zip)
+distroBundles		:= false		# Create bundle files (zip)
+distroCore 			:= false		# Create distribution files (zip only 'core')
+download 			:= false		# Download files
+make	 			:= false		# Make (build JAR files)
+test	 			:= false		# Run test cases
+testDb				:= false		# Build databases used in test cases
+uploadCore			:= false		# Upload 'core' package
+uploadDbs			:= false		# Upload all databases in 'zip' directory
+uploadDev			:= false		# Upload 'development' version
+uploadHtml 			:= false		# Upload weh pages
+
+# Configuration parameters
+version				:= "4.0"
+subversion			:= ""
+versionUnd			:= version.replace("\.","_")
+bundles				:= ["NCBI_bacterial", "ENSEMBL_BFMPP_21", "ENSEMBL_BFMPP_22"]
+
+# Wget parameters
+wget_wait			:= 1								# Wait a few moments between file downloads (to avoid saturating the server)
+wget				:= "wget --wait=$wget_wait -r -nc "	# Wget command line
+
+# Output files
+buildSummary		:= "build.out"
+
+#-------------------------------------------------------------------------------
+# Variables
+#-------------------------------------------------------------------------------
+
+string{} built
+
+#-------------------------------------------------------------------------------
+# Add a build command
+#-------------------------------------------------------------------------------
+bool addBuild(string genome) {
+	dir := "$dirData/$genome"
+	db := "$dir/snpEffectPredictor.bin"
+	geneFiles := dir.dirPath(".*/genes.*") 
+
+	# No 'genes' file? Error
+	if( geneFiles.isEmpty() ) {
+		warning("No genes file for $genome\n")
+		return( false );
+	}
+
+	geneFile := geneFiles.head()
+	if( built.hasKey(genome) ) {
+		print("INFO : Genome $genome already built\n")
+	} else if( db <- geneFile ) {
+		print("BUILD:\t$genome\tgeneFile: $geneFile\tdb: $db\n")
+		task $snpeffBuild $genome 2>&1 | tee $dirBuild/build.$genome.out
+	} else {
+		print("OK  :\t$genome\tgeneFile: $geneFile\tdb: $db\n")
+	}
+
+	# Mark as built
+	built{genome} = genome
+	return( true )
+}
+
+#-------------------------------------------------------------------------------
+# Build JAR files (compile)
+#-------------------------------------------------------------------------------
+
+void build() {
+	buildConfig()
+	sys ./scripts_build/make.sh
+}
+
+#-------------------------------------------------------------------------------
+# Build bundle lists
+#-------------------------------------------------------------------------------
+
+void buildBundleLists() {
+	println "Make bundle lists:"
+
+	# Remove old bundle definitions
+	sys rm -vf config/snpEff.bundles.*.config
+
+	for( string bundle : bundles ) {
+		println "Creating bundles '$bundle'"
+		sys cat config/snpEff.$bundle.config | cut -f 1 -d : | grep ".genome" | sed "s/.genome\s*//" | tr -d " " > snpEff.bundles.$bundle.genomes.txt
+		sys ./scripts_build/createBundles.pl snpEff.bundles.$bundle.genomes.txt $bundle > config/snpEff.bundles.$bundle.config
+	}
+
+	# We must rebuild config file
+	buildConfig()
+}
+
+#-------------------------------------------------------------------------------
+# Build configuration file (snpEff.config)
+#-------------------------------------------------------------------------------
+
+void buildConfig() {
+	sys cat config/snpEff.core.config \
+			config/snpEff.dbs.config \
+			config/snpEff.test.config \
+			config/snpEff.ENSEMBL_70.config \
+			config/snpEff.ENSEMBL_71.config \
+			config/snpEff.ENSEMBL_72.config \
+			config/snpEff.ENSEMBL_73.config \
+			config/snpEff.ENSEMBL_74.config \
+			config/snpEff.ENSEMBL_75.config \
+			config/snpEff.ENSEMBL_76.config \
+			config/snpEff.ENSEMBL_BFMPP_21.config \
+			config/snpEff.ENSEMBL_BFMPP_22.config \
+			config/snpEff.NCBI_bacterial.config \
+			config/snpEff.etc.config \
+			config/snpEff.bundles.*.config \
+			> snpEff.config
+}
+
+#-------------------------------------------------------------------------------
+# Build all databases
+#-------------------------------------------------------------------------------
+
+void buildDb() {
+	copyPwm()		# We must do this before building, otherwise we don't get 'motif.bin' databases
+	buildDbAll()
+	buildDbSpecial()
+}
+
+#-------------------------------------------------------------------------------
+# Build all databases
+#-------------------------------------------------------------------------------
+
+bool buildDbAll() {
+	print("Build: Start\n")
+	dirBuild.mkdir()	# Make sure build dir exists
+	
+	# Look into all directories
+	print("Available databases:\n")
+	dbids := sys $snpeff databases | cut -f 1 | tail -n +3 
+
+	print("Building:\n")
+	for(string genome : dbids.lines()  ) {
+		genome = genome.trim().baseName()
+		addBuild(genome)
+	}
+	wait
+
+	# Create build summary
+	print("Build: Checking build logs!\n")
+	sys cat $dirBuild/build.*.out | ./scripts_build/buildCheck.pl | tee $buildSummary
+
+	print("Build: Done!\n")
+	return( true )
+}
+
+#-------------------------------------------------------------------------------
+# Build special databases
+#-------------------------------------------------------------------------------
+
+void buildDbSpecial() {
+	buildNextProt()
+}
+
+#-------------------------------------------------------------------------------
+# Build databases used in test cases
+#-------------------------------------------------------------------------------
+
+void buildDbTest() {
+	dirs := "$dirSnpeff/data/".dir("test.*")
+
+	# This one needs PWMs
+	sys cp db/jaspar/pwms.bin data/testHg3770Chr22/
+
+	# Build all test genomes
+	for( string gen : dirs ) {
+		db := "$dirSnpeff/data/$gen/snpEffectPredictor.bin"
+		if( ! db.exists() )	{
+			println "Genome: $gen\tdb: '$db'"
+			task $snpeff build -v $gen
+		}
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Build special databases
+#-------------------------------------------------------------------------------
+
+void buildNextProt() {
+	# Note: This takes a huge amount of memory, don't run multiple of these process because the server will crash
+	# TODO: Add amount of memory to the taks and remove the constraint
+	print("Build special.\n\tFIXME: Create a 'task' instead of a 'sys'\n")
+
+	# XML files used to build NextProt
+	dirNextProt := "$dirSnpeff/db/nextProt/"
+	xmlFiles := dirNextProt.dirPath(".*.xml")
+
+	# Check each genome version
+	for( string hg : dirData.dir("GRCh37.7.*") ) {
+		npfile := "$dirData/$hg/nextProt.bin"
+
+		if( !npfile.exists() ) {
+			print("NextProt ($hg): Build\n")
+			sys $snpeffXl buildNextProt -v $hg db/nextProt/
+		} else {
+			print("NextProt ($hg): OK\n")
+		}
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Copy pwms.bin to every human dir
+#-------------------------------------------------------------------------------
+void copyPwm() {
+	humanDirs := dirData.dirPath(".*/GRCh.*")
+	print("Copying $pwmsBin to human genomes\n")
+	for( string hg : humanDirs ) {
+		print("\t$hg\n")
+		sys cp $pwmsBin $hg
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Download all databases
+#-------------------------------------------------------------------------------
+
+void downloadAll() {
+	sys ./scripts_build/download_ensembl_bfmpp.sh
+	sys ./scripts_build/download_ensembl.sh
+
+	# Human specific databases
+	sys ./scripts_build/download_hg19.sh
+	sys ./scripts_build/download_hg19kg.sh
+	sys ./scripts_build/download_nextProt.sh
+	sys ./scripts_build/download_Pwms_Jaspar.sh
+	sys ./scripts_build/download_gwasCatalog.sh 
+	sys ./scripts_build/download_epigenome.sh	# This might take a few days
+	sys ./scripts_build/download_ncbi.sh		# NCBI downloads do not seem to be working OK
+	#sys ./scripts_build/download_darned.sh		# Darned not working
+
+	# Move downloaded data to 'data' dir
+	sys mv $dirDownload/data/genomes/* data/genomes/ 
+	sys rmdir $dirDownload/data/genomes 
+	sys mv $dirDownload/data/* data/ 
+	sys rmdir $dirDownload/data/
+}
+
+#-------------------------------------------------------------------------------
+# Create distribution files
+#-------------------------------------------------------------------------------
+
+void makeDistro() {
+	dirZip.mkdir()	# Make sure zip dir exists
+	zipCore()
+	zipDbs()
+	zipBundles()
+}
+
+#-------------------------------------------------------------------------------
+# RUn test cases
+#-------------------------------------------------------------------------------
+
+void runTests() {
+	# Run SnpSift test cases
+	sys cd $HOME/workspace/SnpSift/ ; \
+		java -Xmx4g \
+			-cp $dirSnpeff/SnpSift.jar \
+			org.junit.runner.JUnitCore \
+			ca.mcgill.mcb.pcingola.snpSift.testCases.TestSuiteAll \
+			2>&1 \
+			| tee $dirSnpeff/testCases.snpsift.txt
+
+	# Run SnpEff test cases
+	sys cd $HOME/workspace/SnpEff/ ; \
+		java -Xmx4g \
+			-cp $dirSnpeff/snpEff.jar \
+			org.junit.runner.JUnitCore \
+			ca.mcgill.mcb.pcingola.snpEffect.testCases.TestSuiteAll \
+			2>&1 \
+			| tee $dirSnpeff/testCases.snpeff.txt
+}
+
+#-------------------------------------------------------------------------------
+# Upload core files
+#-------------------------------------------------------------------------------
+
+void uploadCore2Sf() {
+	zip := "snpEff_v" + versionUnd + "_core.zip"
+	zipLatest := "snpEff_latest_core.zip"
+	sys scp -v $zip $zipLatest pcingola,snpeff@frs.sourceforge.net:/home/frs/project/s/sn/snpeff/
+}
+
+#-------------------------------------------------------------------------------
+# Upload database files
+#-------------------------------------------------------------------------------
+
+void uploadDbs2Sf() {
+	sys scp -v $dirZip/snpEff_v$versionUnd*.zip pcingola,snpeff@frs.sourceforge.net:/home/frs/project/s/sn/snpeff/databases/v$versionUnd/
+}
+
+#-------------------------------------------------------------------------------
+# Upload core files
+#-------------------------------------------------------------------------------
+
+void uploadDev2Sf() {
+	zipDev    := "snpEff_development.zip"
+	sys scp -v $zipDev pcingola,snpeff@frs.sourceforge.net:/home/frs/project/s/sn/snpeff/
+}
+
+#-------------------------------------------------------------------------------
+# Upload binary files
+#-------------------------------------------------------------------------------
+
+void uploadHtml2Sf() {
+	htmlDir    := "$HOME/workspace/SnpEff/html"
+
+	# Create version file
+	verFile    := "$htmlDir/versions.txt"
+	println "Creating versions file: '$verFile'"
+	snpEffVer  := sys $snpeff 2>&1  | grep -i "SnpEff version"  | cut -f 3,4,6 -d " " | cut -f 1 -d ")"
+	snpSiftVer := sys $snpsift 2>&1 | grep -i "SnpSift version" | cut -f 3,4,6 -d " " | cut -f 1 -d ")"
+
+	verFile.write(snpEffVer.trim().toUpper() + "\t$snpeffDownload\n" + snpSiftVer.trim().toUpper() + "\t$snpeffDownload\n");
+
+	# Upload HTML, versions and images to SF
+	println "Upload web pages"
+	sys cd $htmlDir ; scp -v -r style.css *.html *.txt images/ pcingola,snpeff@frs.sourceforge.net:htdocs/
+}
+
+#-------------------------------------------------------------------------------
+# Create bundle's ZIP files
+#-------------------------------------------------------------------------------
+
+void zipBundles() {
+	println "Create bundles ZIP files"
+
+	bundleList := "bundles.txt"
+	bundleLines := sys cat $dirSnpeff/snpEff.config | grep .bundle. > $bundleList
+	bundleList.rmOnExit()
+
+	for( string bline : bundleList.read().lines() ) {
+		bfields := bline.split(':')
+
+		# Bundle name
+		bname := bfields[0].trim().removeExt('.bundle')
+
+		string[] bins
+		for( string gen : bfields[1].split(' ') ) {
+			bin := "$dirData/$gen/snpEffectPredictor.bin"
+			if( bin.exists() ) bins.add( bin )
+		}
+
+		# Zip files
+		zipList := bins.join(' ')
+		zipName := "$dirZip/snpEff_v" + versionUnd + "_" + bname + ".zip"
+		if( zipName <- bins ) {
+			println "\tZIP Bundle: $zipName"
+			task zip $zipName $zipList
+		}
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Create SnpEff core Zip file
+#-------------------------------------------------------------------------------
+
+void zipCore() {
+	dir := "snpEff_$versionUnd"
+	sys rm -rvf $dir snpEff
+	sys mkdir $dir
+
+	# Copy core files
+	sys cp -RvfL snpEff.config snpEff.jar SnpSift.jar examples galaxy scripts $dir
+
+	# Change name to 'snpEff' (so that config file can be used out of the box)
+	sys mv $dir snpEff
+
+	# Create 'core' zip file
+	zip := "snpEff_v" + versionUnd + "_core.zip"
+	zipLatest := "snpEff_latest_core.zip"
+	zipDev    := "snpEff_development.zip"
+	sys rm -f $zip 2> /dev/null
+	task { 
+		sys zip -r $zip snpEff
+		sys cp $zip $zipLatest
+		sys cp $zip $zipDev
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Create databases (non-bundled) Zip files
+#-------------------------------------------------------------------------------
+
+void zipDb(string gen) {
+	bin := "data/$gen/snpEffectPredictor.bin"
+
+	# Do not create ZIP file unless database exists
+	if( bin.exists() ) {
+		zip := "$dirZip/snpEff_v" + versionUnd + "_$gen.zip"
+		println "\tZIP '$zip'"
+		task( zip <- bin )	sys zip -r $zip data/$gen/*.bin
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Create databases (non-bundled) Zip files
+#-------------------------------------------------------------------------------
+
+void zipDbs() {
+	println "Create database ZIP files"
+	dbList := "databases.txt"
+	dbs := sys $snpeff databases | cut -f 1,4 > $dbList
+	dbList.rmOnExit()
+
+	for( string db : dbList.read().lines() ) {
+		fields := db.split('\t')
+		gen := fields[0].trim()
+		bundle := fields[1].trim()
+
+		# Do not zip bundled databases
+		if( bundle.isEmpty() )	zipDb(gen)
+	}
+}
+
+#-------------------------------------------------------------------------------
+# Main
+#-------------------------------------------------------------------------------
+
+print("Building\n")
+
+if( bundleLists )		buildBundleLists()		# Create bundle list and config files
+if( config )			buildConfig()			# Create config file
+if( db )				buildDb()				# Build genomes
+if( distro )			makeDistro()			# Create distribution files
+if( distroCore )		zipCore()				# Create distribution files (core 'zip')
+if( distroBundles )		zipBundles()			# Create 'bundle' distribution files
+if( download )			downloadAll()			# Perform downloads
+if( make )				build()					# Create JAR files
+if( test )				runTests()				# Run test cases 
+if( testDb )			buildDbTest()			# Build databases used in test cases
+if( uploadCore )		uploadCore2Sf()			# Upload 'core' files
+if( uploadDbs )			uploadDbs2Sf()			# Upload all database files in 'zip' dir
+if( uploadDev )			uploadDev2Sf()			# Upload 'development' version
+if( uploadHtml )		uploadHtml2Sf()			# Upload html pages
+if( zipGenome != '' )	zipDb(zipGenome)		# Zip only 'zipGenome' database
+
+wait
+print("Done\n")

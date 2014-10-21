@@ -1,6 +1,8 @@
 package ca.mcgill.mcb.pcingola.interval;
 
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import java.util.LinkedList;
+
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.util.GprSeq;
 
 /**
@@ -27,19 +29,159 @@ public class Variant extends Marker {
 		, MNP // Multiple nucleotide polymorphism (i.e. several bases are changed)
 		, INS // Insertion (i.e. some bases added)
 		, DEL // Deletion (some bases removed)
-		, MIXED // A mixture of insertion, deletions, SNPs and or MNPs (a.k.a. subtitution)
-		, Interval
+		, MIXED // A mixture of insertion, deletions, SNPs and or MNPs (a.k.a. substitution)
+		, INTERVAL
 		// Just analyze interval hits. Not a variant (e.g. BED input format)
 	}
 
-	private static final long serialVersionUID = -2928105165111400441L;;
+	private static final long serialVersionUID = -2928105165111400441L;
 
-	VariantType variantType;
+	VariantType variantType; // Variant type
 	String ref; // Reference (i.e. original bases in the genome)
 	String alt; // Changed bases
-	String[] alts; // Available change options (when multiple ALT)
-	boolean imprecise = false; // Imprecise variant: coordinates are not exact (E.g. see section "Encoding Structural Variants in VCF" from VCF spec. 4.1)
 	String genotype; // Genotype order number (in case there are multiple changes per entry (e.g. A VCF entry may encode multiple ALTs). Note: Genotype differences are coded as "2-1" meaning genotype 1 is used as reference and genotype 2 is used as ALT (e.g. somatic vs germline samples)
+	boolean imprecise = false; // Imprecise variant: coordinates are not exact (E.g. see section "Encoding Structural Variants in VCF" from VCF spec. 4.1)
+
+	/**
+	 * Create variants from ALT (which can be multiple values)
+	 */
+	public static LinkedList<Variant> factory(Chromosome chromo, int start, String ref, String altStr, String id) {
+		LinkedList<Variant> list = new LinkedList<Variant>();
+
+		// No alt? It's an interval
+		if (altStr == null) {
+			Variant var = new Variant(chromo, start, ref, null, id);
+			list.add(var);
+			return list;
+		}
+
+		// Split alts
+		String alts[];
+		if (altStr.indexOf(',') >= 0) alts = altStr.split(",");
+		else alts = altStr.split("/");
+
+		// Special case, two ALTs are the same
+		if (alts.length == 2 && alts[0].equals(alts[1])) {
+			Variant var = new Variant(chromo, start, ref, alts[0], id);
+			list.add(var);
+			return list;
+		}
+
+		// Add each alt
+		for (String alt : alts) {
+
+			// Is it a SNP?
+			if (ref.length() == 1 && alt.length() == 1) {
+				// May be IUB code, so we have to translate into multiple SNPs
+				String altsIub[] = snpIUB(alt);
+
+				// Add all SNPs
+				for (String altIub : altsIub) {
+					Variant var = new Variant(chromo, start, ref, altIub, id);
+					list.add(var);
+				}
+
+			} else {
+				Variant var = new Variant(chromo, start, ref, alt, id);
+				list.add(var);
+			}
+		}
+
+		return list;
+	}
+
+	/**
+	 *  Reference http://sourceforge.net/apps/mediawiki/samtools/index.php?title=SAM_FAQ#I_do_not_understand_the_columns_in_the_pileup_output.
+	 *  IUB codes: M=A/C, R=A/G, W=A/T, S=C/G, Y=C/T, K=G/T and N=A/C/G/T
+	 */
+	public static String[] snpIUB(String alt) {
+		String[] alts;
+
+		// Regular base
+		if (alt.equals("A") || alt.equals("C") || alt.equals("G") || alt.equals("T")) {
+			alts = new String[1];
+			alts[0] = alt;
+		} else {
+			switch (alt.charAt(0)) {
+			case 'N': // aNy base
+				alts = new String[4];
+				alts[0] = "A";
+				alts[1] = "C";
+				alts[2] = "G";
+				alts[3] = "T";
+				break;
+
+			case 'B': // B: not A
+				alts = new String[3];
+				alts[0] = "C";
+				alts[1] = "G";
+				alts[2] = "T";
+				break;
+
+			case 'D': // D: not C
+				alts = new String[3];
+				alts[0] = "A";
+				alts[1] = "G";
+				alts[2] = "T";
+				break;
+
+			case 'H': // H: not G
+				alts = new String[3];
+				alts[0] = "A";
+				alts[1] = "C";
+				alts[2] = "T";
+				break;
+
+			case 'V': // V: not T
+				alts = new String[3];
+				alts[0] = "A";
+				alts[1] = "C";
+				alts[2] = "G";
+				break;
+
+			case 'M':
+				alts = new String[2];
+				alts[0] = "A";
+				alts[1] = "C";
+				break;
+
+			case 'R':
+				alts = new String[2];
+				alts[0] = "A";
+				alts[1] = "G";
+				break;
+
+			case 'W': // Weak
+				alts = new String[2];
+				alts[0] = "A";
+				alts[1] = "T";
+				break;
+
+			case 'S': // Strong
+				alts = new String[2];
+				alts[0] = "C";
+				alts[1] = "G";
+				break;
+
+			case 'Y':
+				alts = new String[2];
+				alts[0] = "C";
+				alts[1] = "T";
+				break;
+
+			case 'K':
+				alts = new String[2];
+				alts[0] = "G";
+				alts[1] = "T";
+				break;
+
+			default:
+				throw new RuntimeException("WARNING: Unkown IUB code for SNP '" + alt + "'");
+			}
+		}
+
+		return alts;
+	}
 
 	/**
 	 * This constructor is used when we only have interval data (e.g. when reading a BED file)
@@ -47,9 +189,7 @@ public class Variant extends Marker {
 	public Variant(Marker parent, int start, int end, String id) {
 		super(parent, start, end, false, id);
 		ref = alt = "";
-		variantType = VariantType.Interval;
-		alts = new String[1];
-		alts[0] = "";
+		variantType = VariantType.INTERVAL;
 	}
 
 	public Variant(Marker parent, int position, String referenceStr, String altStr) {
@@ -61,31 +201,18 @@ public class Variant extends Marker {
 	 */
 	public Variant(Marker parent, int position, String referenceStr, String altStr, String id) {
 		super(parent, position, position, false, id);
-		init(parent, position, referenceStr, altStr, id);
+		init(parent, position, referenceStr, altStr, null, id);
 	}
 
 	/**
 	 * Return the change (always in positive strand)
-	 * @return
 	 */
 	public String change() {
 		return isStrandPlus() ? alt : GprSeq.reverseWc(alt);
 	}
 
-	public String getChange() {
+	public String getAlt() {
 		return alt;
-	}
-
-	public String getChangeOption(int i) {
-		return alts[i];
-	}
-
-	public int getChangeOptionCount() {
-		return alts.length;
-	}
-
-	public VariantType getChangeType() {
-		return variantType;
 	}
 
 	public String getGenotype() {
@@ -96,22 +223,8 @@ public class Variant extends Marker {
 		return ref;
 	}
 
-	/**
-	 * Create a new SeqChange for this option
-	 * @param i
-	 * @return
-	 */
-	public Variant getSeqAltOption(int i) {
-		// Just an interval (i.e. no changes)? => return the 'this' object
-		if (variantType == VariantType.Interval) return this;
-
-		// Not a real change? return null
-		// This might happen if ref=alt
-		// E.g.: "A -> T,A"
-		if (ref.equalsIgnoreCase(alts[i])) return null;
-
-		// Create new change
-		return new Variant((Marker) parent, start, ref, alts[i], id);
+	public VariantType getVariantType() {
+		return variantType;
 	}
 
 	@Override
@@ -126,119 +239,66 @@ public class Variant extends Marker {
 		return hashCode;
 	}
 
-	void init(Marker parent, int position, String referenceStr, String altStr, String id) {
+	void init(Marker parent, int position, String referenceStr, String altStr, VariantType variantType, String id) {
+		if (altStr == null) altStr = referenceStr; // Not a variant (this is an interval). Set ref = alt
 		ref = referenceStr.toUpperCase();
 		alt = altStr.toUpperCase();
 
-		// Change type
-		variantType = VariantType.MNP;
-		if (alt.length() == 1) { // Is it a SNP?
-			variantType = VariantType.SNP;
-			if (alt.equals("A") || alt.equals("C") || alt.equals("G") || alt.equals("T")) {
-				alts = new String[1];
-				alts[0] = alt;
-			} else {
+		// Sanity check
+		if (altStr.indexOf(',') >= 0 || altStr.indexOf('/') >= 0) throw new RuntimeException("Variants with multiple ALTs are not allowed (ALT: '" + altStr + "')");
 
-				// Reference http://sourceforge.net/apps/mediawiki/samtools/index.php?title=SAM_FAQ#I_do_not_understand_the_columns_in_the_pileup_output.
-				// IUB codes: M=A/C, R=A/G, W=A/T, S=C/G, Y=C/T, K=G/T and N=A/C/G/T
-				if (alt.length() == 1) {
-					if (alt.equals("N")) { // aNy base
-						alts = new String[4];
-						alts[0] = "A";
-						alts[1] = "C";
-						alts[2] = "G";
-						alts[3] = "T";
-					} else if (alt.equals("B")) { // B: not A
-						alts = new String[3];
-						alts[0] = "C";
-						alts[1] = "G";
-						alts[2] = "T";
-					} else if (alt.equals("D")) { // D: not C
-						alts = new String[3];
-						alts[0] = "A";
-						alts[1] = "G";
-						alts[2] = "T";
-					} else if (alt.equals("H")) { // H: not G
-						alts = new String[3];
-						alts[0] = "A";
-						alts[1] = "C";
-						alts[2] = "T";
-					} else if (alt.equals("V")) { // V: not T
-						alts = new String[3];
-						alts[0] = "A";
-						alts[1] = "C";
-						alts[2] = "G";
-					} else if (alt.equals("M")) {
-						alts = new String[2];
-						alts[0] = "A";
-						alts[1] = "C";
-					} else if (alt.equals("R")) {
-						alts = new String[2];
-						alts[0] = "A";
-						alts[1] = "G";
-					} else if (alt.equals("W")) { // Weak
-						alts = new String[2];
-						alts[0] = "A";
-						alts[1] = "T";
-					} else if (alt.equals("S")) { // Strong
-						alts = new String[2];
-						alts[0] = "C";
-						alts[1] = "G";
-					} else if (alt.equals("Y")) {
-						alts = new String[2];
-						alts[0] = "C";
-						alts[1] = "T";
-					} else if (alt.equals("K")) {
-						alts = new String[2];
-						alts[0] = "G";
-						alts[1] = "T";
-					} else {
-						throw new RuntimeException("WARNING: Unkown IUB code for SNP '" + alt + "'");
-					}
-				}
-			}
-		} else {
-			// Split, if multiple ALTS
-			if (alt.indexOf(',') >= 0) alts = alt.split(",");
-			else alts = alt.split("/");
+		// Remove leading char (we still have some test cases using old TXT format)
+		if (ref.equals("*")) ref = "";
 
-			if (alt.startsWith("+")) {
-				// Insertions
-				variantType = VariantType.INS;
-			} else if (alt.startsWith("-")) {
-				// Deletions
-				variantType = VariantType.DEL;
-				if (alts[0].length() > 1) end = position + alts[0].length() - 2; // Update 'end' position
-			} else if (alt.startsWith("=")) {
-				// Mixed variant (substitution)
-				variantType = VariantType.MIXED;
-				if (alts[0].length() > 1) end = position + alts[0].length() - 2; // Update 'end' position
-			}
-
-			// Insertions and deletions always have '*' as reference
-			if ((variantType == VariantType.INS) || (variantType == VariantType.DEL)) ref = "*";
+		if (alt.startsWith("+")) {
+			// Insertion
+			alt = ref + alt.substring(1);
+		} else if (alt.startsWith("-")) {
+			// Deletion
+			ref = alt.substring(1);
+			alt = "";
+		} else if (alt.startsWith("=")) {
+			// Mixed variant
+			alt = altStr.substring(1);
 		}
 
-		type = EffectType.NONE;
+		//---
+		// Calculate variant type
+		//---
+		if (variantType == null) {
+			if (ref.equals(alt)) this.variantType = VariantType.INTERVAL;
+			else if (ref.length() == 1 && alt.length() == 1) this.variantType = VariantType.SNP;
+			else if (ref.length() == alt.length()) this.variantType = VariantType.MNP;
+			else if (ref.length() < alt.length() && alt.startsWith(ref)) this.variantType = VariantType.INS;
+			else if (ref.length() > alt.length() && ref.startsWith(alt)) this.variantType = VariantType.DEL;
+			else this.variantType = VariantType.MIXED;
+		} else this.variantType = variantType;
 
+		//---
 		// Start and end position
 		// 	- Start is always the leftmost base
 		//	- End is always the rightmost affected base in the reference genome
+		//---
 		start = position;
 		if (isIns() || isSnp()) {
 			// These changes only affect one position in the reference genome
 			end = start;
-		} else {
-			for (int i = 0; i < alts.length; i++) {
-				String ch = alts[i];
-				if (ch.startsWith("+") || ch.startsWith("-") || ch.startsWith("=")) ch = ch.substring(1);
-				end = Math.max(end, start + ch.length() - 1);
-			}
+		} else { // if (isDel() || isMnp()) {
+			// Update 'end' position
+			if (ref.length() > 1) end = start + ref.length() - 1;
 		}
+
+		// Effect type
+		type = EffectType.NONE;
+		this.id = id;
 	}
 
 	public boolean isDel() {
 		return (variantType == VariantType.DEL);
+	}
+
+	public boolean isElongation() {
+		return lengthChange() > 0;
 	}
 
 	public boolean isImprecise() {
@@ -254,7 +314,11 @@ public class Variant extends Marker {
 	}
 
 	public boolean isInterval() {
-		return (variantType == VariantType.Interval);
+		return (variantType == VariantType.INTERVAL);
+	}
+
+	public boolean isMixed() {
+		return (variantType == VariantType.MIXED);
 	}
 
 	public boolean isMnp() {
@@ -270,54 +334,43 @@ public class Variant extends Marker {
 		return variantType == VariantType.SNP;
 	}
 
-	/**
-	 * Is this a change or are the changes actually the same as the reference
-	 */
-	public boolean isVariant() {
-		for (String chg : alts)
-			if (!ref.equals(chg)) return true; // Any change option is different? => true
-		return false;
+	public boolean isTruncation() {
+		return lengthChange() < 0;
 	}
 
-	public boolean isVariantMultiple() {
-		return alts.length > 1;
+	/**
+	 * Is this a change or is ALT actually the same as the reference
+	 */
+	public boolean isVariant() {
+		return !ref.equals(alt);
 	}
 
 	/**
 	 * Calculate the number of bases of change in length
-	 * @return
 	 */
 	public int lengthChange() {
-		if (isVariantMultiple()) throw new RuntimeException("Cannot ask for lengthChange on multiple changes!\n\tSeqChange : " + this);
-
-		if (isVariantMultiple()) throw new RuntimeException("Cannot ask for lengthChange onSeqChange modifies transcript length: Unimplemented!"); // We'll focus on SNPs & MNPs now, we'll do other changes later
 		if (isSnp() || isMnp()) return 0;
 
 		// This is a length changing SeqChange (i.e. Insertions, deletion, or mixed change)
 		// Calculate the number of bases of change in length
-		return alts[0].length() - ref.length();
+		return alt.length() - ref.length();
 	}
 
 	/**
 	 * Return the change (always compared to 'referenceStrand') without any '+' or '-' leading characters
-	 * @return
 	 */
 	public String netChange(boolean reverseStrand) {
-		String netChange = alt;
-		if (alt.startsWith("+") || alt.startsWith("-")) netChange = alt.substring(1); // Remove leading char
-
-		// Need reverse-WC?
-		return reverseStrand ? GprSeq.reverseWc(netChange) : netChange;
+		if (isDel()) return reverseStrand ? GprSeq.reverseWc(ref) : ref; // Deleteion have empty 'alt'
+		return reverseStrand ? GprSeq.reverseWc(alt) : alt; // Need reverse-WC?
 	}
 
 	/**
 	 * Only the part of the change that overlaps with a marker
 	 * Return the change (always in positive strand) without any '+' or '-' leading characters
-	 * @return
 	 */
 	public String netChange(Marker marker) {
 		String netChange = alt;
-		if (alt.startsWith("+") || alt.startsWith("-")) netChange = alt.substring(1); // Remove leading char
+		if (isDel()) netChange = ref; // In deletions 'alt' is empty
 
 		int removeBefore = marker.getStart() - start;
 		if (removeBefore > 0) {
@@ -340,14 +393,9 @@ public class Variant extends Marker {
 
 	/**
 	 * Return the reference (always in positive strand)
-	 * @return
 	 */
 	public String reference() {
 		return isStrandPlus() ? ref : GprSeq.reverseWc(ref);
-	}
-
-	public void setChangeType(VariantType changeType) {
-		variantType = changeType;
 	}
 
 	public void setGenotype(String genotype) {
@@ -358,14 +406,18 @@ public class Variant extends Marker {
 		this.imprecise = imprecise;
 	}
 
+	public void setVariantType(VariantType variantType) {
+		this.variantType = variantType;
+	}
+
 	@Override
 	public String toString() {
-		if (variantType == VariantType.Interval) return "chr" + getChromosomeName() + ":" + start + "-" + end;
+		if (variantType == VariantType.INTERVAL) return "chr" + getChromosomeName() + ":" + start + "-" + end;
 
 		return "chr" + getChromosomeName() //
 				+ ":" + start //
 				+ "_" + getReference() //
-				+ "/" + getChange() //
+				+ "/" + getAlt() //
 				+ ((id != null) && (id.length() > 0) ? " '" + id + "'" : "");
 	}
 
@@ -375,6 +427,15 @@ public class Variant extends Marker {
 	 */
 	public String toStringEnsembl() {
 		return getChromosomeName() + "\t" + start + "\t" + end + "\t" + ref + "/" + alt + "\t+";
+	}
+
+	/**
+	 * Old format, used for some test cases
+	 */
+	public String toStringOld() {
+		if (isIns()) return getChromosomeName() + ":" + getStart() + "_*" + "/+" + getAlt();
+		else if (isDel()) return getChromosomeName() + ":" + getStart() + "_*" + "/-" + getReference();
+		return getChromosomeName() + ":" + getStart() + "_" + getReference() + "/" + getAlt();
 	}
 
 }

@@ -3,7 +3,7 @@ package ca.mcgill.mcb.pcingola.interval;
 import java.util.Collections;
 import java.util.Iterator;
 
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.util.KeyValue;
 
@@ -50,9 +50,9 @@ public class Custom extends Marker implements Iterable<KeyValue<String, String>>
 	}
 
 	@Override
-	public boolean seqChangeEffect(Variant seqChange, VariantEffects changeEffecs) {
+	public boolean variantEffect(Variant seqChange, VariantEffects changeEffecs) {
 		if (!intersects(seqChange)) return false; // Sanity check
-		changeEffecs.add(this, EffectType.CUSTOM, label);
+		changeEffecs.addEffect(this, EffectType.CUSTOM, label);
 		return true;
 	}
 

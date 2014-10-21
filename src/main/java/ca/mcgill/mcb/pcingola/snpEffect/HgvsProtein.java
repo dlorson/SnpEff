@@ -2,7 +2,6 @@ package ca.mcgill.mcb.pcingola.snpEffect;
 
 import ca.mcgill.mcb.pcingola.codons.CodonTable;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
 
 /**
  * Coding change in HGVS notation (amino acid changes)
@@ -13,28 +12,29 @@ public class HgvsProtein extends Hgvs {
 
 	int codonNum, aaPos;
 	String aaNew3, aaOld3;
-	EffectType effectType;
 
-	public HgvsProtein(VariantEffect changeEffect) {
-		super(changeEffect);
+	// EffectType effectType;
 
-		codonNum = changeEffect.getCodonNum();
-		marker = changeEffect.getMarker();
-		effectType = changeEffect.getEffectType();
+	public HgvsProtein(VariantEffect variantEffect) {
+		super(variantEffect);
+
+		codonNum = variantEffect.getCodonNum();
+		marker = variantEffect.getMarker();
+		// effectType = variantEffect.getEffectType();
 
 		// No marker? Nothing to do
 		if (marker != null) {
 			// Codon numbering
 			// HGVS: the translation initiator Methionine is numbered as +1
-			aaPos = codonNum + 1;
+			if (codonNum >= 0) aaPos = codonNum + 1;
 
 			// Convert to 3 letter code
 			// HGVS: the three-letter amino acid code is prefered (see Discussion), with "*" designating a translation
 			// 		 termination codon; for clarity we this page describes changes using the three-letter amino acid
 			CodonTable codonTable = marker.codonTable();
 
-			String aaNew = changeEffect.getAaNew();
-			String aaOld = changeEffect.getAaOld();
+			String aaNew = variantEffect.getAaNew();
+			String aaOld = variantEffect.getAaOld();
 
 			if (aaNew == null || aaNew.isEmpty() || aaNew.equals("-")) aaNew3 = "";
 			else aaNew3 = codonTable.aaThreeLetterCode(aaNew);
@@ -87,7 +87,7 @@ public class HgvsProtein extends Hgvs {
 		 * A frame shift is described using "fs" after the first amino acid affected by the change.
 		 * Descriptions either use a short ("fs") or long ("fsTer#") description
 		 */
-		if (effectType == EffectType.FRAME_SHIFT) return "fs";
+		if (variantEffect.hasEffectType(EffectType.FRAME_SHIFT)) return "fs";
 
 		return "del";
 	}
@@ -109,42 +109,96 @@ public class HgvsProtein extends Hgvs {
 	 */
 	protected String ins() {
 		// We cannot write frame shifts this way
-		if (effectType == EffectType.FRAME_SHIFT) return "fs";
+		if (variantEffect.hasEffectType(EffectType.FRAME_SHIFT)) return "fs";
+
 		return "ins" + aaNew3;
+	}
+
+	/**
+	 * Mixed variants
+	 * Deletion/insertions (indels) replace one or more amino acid residues with one or more other
+	 * amino acid residues. Deletion/insertions are described using "delins" as a deletion followed
+	 * by an insertion after an indication of the amino acid(s) flanking the site of the
+	 * deletion/insertion separated by a "_" (underscore, see Discussion). Frame shifts are a special
+	 * type of amino acid deletion/insertion affecting an amino acid between the first (initiation, ATG)
+	 * and last codon (termination, stop), replacing the normal C-terminal sequence with one encoded
+	 * by another reading frame (specified 2013-10-11). A frame shift is described using "fs" after
+	 * the first amino acid affected by the change. Descriptions either use a short ("fs") or long
+	 * ("fsTer#") description. The description of frame shifts does not include the deletion at
+	 * protein level from the site of the frame shift to the natural end of the protein (stop codon).
+	 * The inserted amino acid residues are not described, only the total length of the new shifted
+	 * frame is given (i.e. including the first amino acid changed).
+	 */
+	protected String mixed() {
+		if (variantEffect.hasEffectType(EffectType.FRAME_SHIFT)) return "fs";
+
+		// Can we simplify AAs?
+		while (!aaOld3.isEmpty() && !aaNew3.isEmpty()) {
+			String ao3 = aaOld3.substring(0, 3);
+			String an3 = aaNew3.substring(0, 3);
+			if (ao3.equals(an3)) {
+				aaOld3 = aaOld3.substring(3);
+				aaNew3 = aaNew3.substring(3);
+				codonNum++;
+			} else break;
+		}
+
+		return "delins" + aaNew3;
 	}
 
 	/**
 	 * Protein coding position
 	 */
 	protected String pos() {
-		switch (seqChange.getChangeType()) {
+		switch (variant.getVariantType()) {
 		case SNP:
 		case MNP:
 			return pos(codonNum);
 
 		case INS:
-			String p = pos(codonNum);
-			if (p == null) return null;
-			String pNext = pos(codonNum + 1);
-			if (pNext == null) return null;
-			return p + "_" + pNext;
+			String posStart = pos(codonNum);
+			if (posStart == null) return null;
+			String posEnd = pos(codonNum + 1);
+			if (posEnd == null) return null;
+			return posStart + "_" + posEnd;
 
 		case DEL:
-			p = pos(codonNum);
-			if (p == null) return null;
+			posStart = pos(codonNum);
+			if (posStart == null) return null;
 
-			String aaOld = changeEffect.getAaOld();
-			String aaNew = changeEffect.getAaNew();
-			if (aaOld == null || aaOld.isEmpty() || aaOld.equals("-")) return null;
-			if (aaNew == null || aaNew.isEmpty() || aaNew.equals("-")) aaNew = "";
-			int end = codonNum + (aaOld.length() - aaNew.length());
-			pNext = pos(end);
-			if (pNext == null) return null;
+			// Frame shifts ....are described using ... the change of the first amino acid affected
+			// ... the description does not include a description of the deletion from the site of the change
+			if (variantEffect.hasEffectType(EffectType.FRAME_SHIFT)) return posStart;
 
-			return p + "_" + pNext;
+			if (aaOld3 == null || aaOld3.isEmpty() || aaOld3.equals("-")) return null;
+			if (aaOld3.length() == 3) return posStart; // Single AA deleted
+
+			int end = codonNum + (aaOld3.length() / 3) - 1;
+			posEnd = pos(end);
+			if (posEnd == null) return null;
+
+			return posStart + "_" + posEnd;
+
+		case MIXED:
+			posStart = pos(codonNum);
+			if (posStart == null) return null;
+
+			// Frame shifts ....are described using ... the change of the first amino acid affected
+			// ... the description does not include a description of the deletion from the site of the change
+			if (variantEffect.hasEffectType(EffectType.FRAME_SHIFT)) return posStart;
+
+			if (aaOld3 == null || aaOld3.isEmpty() || aaOld3.equals("-")) aaOld3 = "";
+			if (aaOld3.length() == 3) return posStart; // Single AA deleted
+			end = codonNum + (aaOld3.length() / 3) - 1;
+			posEnd = pos(end);
+			if (posEnd == null) return null;
+			return posStart + "_" + posEnd;
+
+		case INTERVAL:
+			return "";
 
 		default:
-			return null;
+			throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 		}
 	}
 
@@ -153,49 +207,32 @@ public class HgvsProtein extends Hgvs {
 	 */
 	protected String pos(int codonNum) {
 		if (codonNum < 0) return null;
-		Transcript tr = changeEffect.getTranscript();
+
+		// Sanity check: Longer than protein?
+		Transcript tr = variantEffect.getTranscript();
 		String protSeq = tr.protein();
 		if (codonNum >= protSeq.length()) return null;
+
 		CodonTable codonTable = marker.codonTable();
-		return codonNum + codonTable.aaThreeLetterCode(protSeq.charAt(codonNum));
+		return codonTable.aaThreeLetterCode(protSeq.charAt(codonNum)) + (codonNum + 1);
 	}
 
 	/**
 	 * SNP or MNP changes
-	 * @return
 	 */
 	protected String snpOrMnp() {
 		// No codon change information? only codon number?
-		if (changeEffect.getAaOld().isEmpty() && changeEffect.getAaNew().isEmpty()) {
+		if (variantEffect.getAaOld().isEmpty() && variantEffect.getAaNew().isEmpty()) {
 			if (codonNum >= 0) return "" + (codonNum + 1);
 			return null;
 		}
 
-		// Synonymous changes
-		if ((effectType == EffectType.SYNONYMOUS_CODING) //
-				|| (effectType == EffectType.SYNONYMOUS_STOP) //
-		) {
-			// HGVS: Description of so called "silent" changes in the format p.Leu54Leu (or p.L54L) is not allowed; descriptions
-			// 		 should be given at DNA level, it is non-informative and not unequivocal (there are five possibilities
-			// 		 at DNA level which may underlie p.Leu54Leu);  correct description has the format c.162C>G.
-			return "p." + aaOld3 + aaPos + aaNew3;
-		}
-
-		// Start codon lost
-		if ((effectType == EffectType.START_LOST) //
-				|| (effectType == EffectType.SYNONYMOUS_START) //
-				|| (effectType == EffectType.NON_SYNONYMOUS_START) //
-		) {
-			// Reference : http://www.hgvs.org/mutnomen/disc.html#Met
-			// Currently, variants in the translation initiating Methionine (M1) are usually described as a substitution, e.g. p.Met1Val.
-			// This is not correct. Either no protein is produced (p.0) or a new translation initiation site up- or downstream is used (e.g. p.Met1ValextMet-12 or p.Met1_Lys45del resp.).
-			// Unless experimental proof is available, it is probably best to report the effect on protein level as "p.Met1?" (unknown).
-			// When experimental data show that no protein is made, the description "p.0" is recommended (see Examples).
-			//
-			// We use the same for SYNONYMOUS_START since we cannot rally predict if the new start codon will actually be functioning as a start codon (since the Kozak sequence changed)
-			// Ditto for NON_SYNONYMOUS_START
-			return "p." + aaOld3 + "1?";
-		}
+		// Stop gained
+		// Reference: http://www.hgvs.org/mutnomen/recs-prot.html#del
+		// Nonsense variant are a special type of amino acid deletion removing the entire C-terminal part of a
+		// protein starting at the site of the variant. A nonsense change is described using the format
+		// p.Trp26Ter (alternatively p.Trp26*).
+		if (variantEffect.hasEffectType(EffectType.STOP_GAINED)) return "p." + aaOld3 + aaPos + "*";
 
 		// Stop codon mutations
 		// Reference: http://www.hgvs.org/mutnomen/recs-prot.html#extp
@@ -206,26 +243,39 @@ public class HgvsProtein extends Hgvs {
 		// 		p.*327Argext*? (alternatively p.Ter327ArgextTer? or p.*327Rext*?) describes a variant in the stop
 		//		codon (Ter/*) at position 327, changing it to a codon for Arginine (Arg, R) and adding a tail of
 		//		new amino acids of unknown length since the shifted frame does not contain a new stop codon.
-		if (effectType == EffectType.STOP_LOST) return "p." + aaOld3 + aaPos + aaNew3 + "ext*?";
+		if (variantEffect.hasEffectType(EffectType.STOP_LOST)) return "p." + aaOld3 + aaPos + aaNew3 + "ext*?";
 
-		// Reference: 		http://www.hgvs.org/mutnomen/recs-prot.html#del
-		// Nonsense variant are a special type of amino acid deletion removing the entire C-terminal part of a
-		// protein starting at the site of the variant. A nonsense change is described using the format
-		// p.Trp26Ter (alternatively p.Trp26*).
-		if (effectType == EffectType.STOP_GAINED) return "p." + aaOld3 + aaPos + "*";
+		// Start codon lost
+		// Reference : http://www.hgvs.org/mutnomen/disc.html#Met
+		// Currently, variants in the translation initiating Methionine (M1) are usually described as a substitution, e.g. p.Met1Val.
+		// This is not correct. Either no protein is produced (p.0) or a new translation initiation site up- or downstream is used (e.g. p.Met1ValextMet-12 or p.Met1_Lys45del resp.).
+		// Unless experimental proof is available, it is probably best to report the effect on protein level as "p.Met1?" (unknown).
+		// When experimental data show that no protein is made, the description "p.0" is recommended (see Examples).
+		//
+		// We use the same for SYNONYMOUS_START since we cannot rally predict if the new start codon will actually be functioning as a start codon (since the Kozak sequence changed)
+		// Ditto for NON_SYNONYMOUS_START
+		if (variantEffect.hasEffectType(EffectType.START_LOST) //
+				|| variantEffect.hasEffectType(EffectType.SYNONYMOUS_START) //
+				|| variantEffect.hasEffectType(EffectType.NON_SYNONYMOUS_START) //
+				) return "p." + aaOld3 + "1?";
+
+		// Synonymous changes
+		// Description of so called "silent" changes in the format p.Leu54Leu (or p.L54L) is not allowed; descriptions
+		// should be given at DNA level, it is non-informative and not unequivocal (there are five possibilities
+		// at DNA level which may underlie p.Leu54Leu);  correct description has the format c.162C>G.
+		if ((variantEffect.hasEffectType(EffectType.SYNONYMOUS_CODING)) //
+				|| (variantEffect.hasEffectType(EffectType.SYNONYMOUS_STOP)) //
+				) return "p." + aaOld3 + aaPos + aaNew3;
 
 		return "p." + aaOld3 + aaPos + aaNew3;
 	}
 
 	@Override
 	public String toString() {
-		if (seqChange == null || marker == null) return null;
-
-		String pos = pos();
-		if (pos == null) return null;
+		if (variant == null || marker == null) return null;
 
 		String protChange = "";
-		switch (seqChange.getChangeType()) {
+		switch (variant.getVariantType()) {
 		case SNP:
 		case MNP:
 			return snpOrMnp();
@@ -238,10 +288,19 @@ public class HgvsProtein extends Hgvs {
 			protChange = del();
 			break;
 
-		default:
+		case MIXED:
+			protChange = mixed();
 			break;
+
+		case INTERVAL:
+			return "";
+
+		default:
+			throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 		}
 
+		String pos = pos();
+		if (pos == null) return null;
 		return "p." + pos + protChange;
 	}
 }

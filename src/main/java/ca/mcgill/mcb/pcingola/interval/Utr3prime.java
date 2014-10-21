@@ -1,12 +1,13 @@
 package ca.mcgill.mcb.pcingola.interval;
 
 import ca.mcgill.mcb.pcingola.interval.Variant.VariantType;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 
 /**
  * Interval for a UTR (5 prime UTR and 3 prime UTR
- * 
+ *
  * @author pcingola
  *
  */
@@ -34,37 +35,35 @@ public class Utr3prime extends Utr {
 		return false;
 	}
 
+	/**
+	 * Calculate distance from beginning of 3'UTRs
+	 */
 	@Override
-	public boolean seqChangeEffect(Variant seqChange, VariantEffects changeEffects) {
-		if (!intersects(seqChange)) return false;
+	int utrDistance(Variant variant, Transcript tr) {
+		int cdsEnd = tr.getCdsEnd();
+		if (cdsEnd < 0) return -1;
 
-		if (seqChange.includes(this) && (seqChange.getChangeType() == VariantType.DEL)) {
-			changeEffects.add(this, EffectType.UTR_3_DELETED, ""); // A UTR was removed entirely
+		if (isStrandPlus()) return variant.getStart() - cdsEnd;
+		return cdsEnd - variant.getEnd();
+	}
+
+	@Override
+	public boolean variantEffect(Variant variant, VariantEffects variantEffects) {
+		if (!intersects(variant)) return false;
+
+		if (variant.includes(this) && (variant.getVariantType() == VariantType.DEL)) {
+			variantEffects.addEffect(this, EffectType.UTR_3_DELETED, ""); // A UTR was removed entirely
 			return true;
 		}
 
 		Transcript tr = (Transcript) findParent(Transcript.class);
-		int dist = utrDistance(seqChange, tr);
-		changeEffects.add(this, type, dist >= 0 ? dist + " bases from CDS" : "");
-		if (dist >= 0) changeEffects.setDistance(dist);
+		int distance = utrDistance(variant, tr);
+
+		VariantEffect variantEffect = variantEffects.newVariantEffect();
+		variantEffect.set(this, type, type.effectImpact(), distance >= 0 ? distance + " bases from CDS" : "");
+		variantEffect.setDistance(distance);
+		variantEffects.addEffect(variantEffect);
 
 		return true;
 	}
-
-	/**
-	 * Calculate distance from beginning of 3'UTRs
-	 * 
-	 * @param snp
-	 * @param utr
-	 * @return
-	 */
-	@Override
-	int utrDistance(Variant seqChange, Transcript tr) {
-		int cdsEnd = tr.getCdsEnd();
-		if (cdsEnd < 0) return -1;
-
-		if (isStrandPlus()) return seqChange.getStart() - cdsEnd;
-		return cdsEnd - seqChange.getEnd();
-	}
-
 }

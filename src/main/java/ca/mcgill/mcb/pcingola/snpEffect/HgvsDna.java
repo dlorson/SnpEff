@@ -1,6 +1,8 @@
 package ca.mcgill.mcb.pcingola.snpEffect;
 
 import ca.mcgill.mcb.pcingola.interval.Intron;
+import ca.mcgill.mcb.pcingola.interval.Marker;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.util.GprSeq;
 
 /**
@@ -28,8 +30,8 @@ import ca.mcgill.mcb.pcingola.util.GprSeq;
 
 public class HgvsDna extends Hgvs {
 
-	public HgvsDna(VariantEffect changeEffect) {
-		super(changeEffect);
+	public HgvsDna(VariantEffect variantEffect) {
+		super(variantEffect);
 	}
 
 	/**
@@ -41,92 +43,138 @@ public class HgvsDna extends Hgvs {
 
 	/**
 	 * DNA level base changes
-	 * @return
 	 */
 	protected String dnaBaseChange() {
 
-		switch (seqChange.getChangeType()) {
+		switch (variant.getVariantType()) {
 		case SNP:
 		case MNP:
-			if (marker == null || marker.isStrandPlus()) return seqChange.getReference() + ">" + seqChange.getChange();
-			return GprSeq.wc(seqChange.getReference()) + ">" + GprSeq.wc(seqChange.getChange());
+			if (marker == null || marker.isStrandPlus()) return variant.getReference() + ">" + variant.getAlt();
+			return GprSeq.reverseWc(variant.getReference()) + ">" + GprSeq.reverseWc(variant.getAlt());
 
 		case INS:
 		case DEL:
-			String netChange = seqChange.netChange(false);
+			String netChange = variant.netChange(false);
 			if (marker == null || marker.isStrandPlus()) return netChange;
-			return GprSeq.wc(netChange);
+			return GprSeq.reverseWc(netChange);
+
+		case MIXED:
+			if (marker == null || marker.isStrandPlus()) return "del" + variant.getReference() + "ins" + variant.getAlt();
+			return "del" + GprSeq.reverseWc(variant.getReference()) + "ins" + GprSeq.reverseWc(variant.getAlt());
+
+		case INTERVAL:
+			return "";
 
 		default:
-			return null;
+			throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 		}
 	}
 
 	/**
 	 * Calculate position
-	 * @return
 	 */
 	protected String pos() {
 		// Intron
-		if (changeEffect.isIntron()) {
-			switch (seqChange.getChangeType()) {
+		if (variantEffect.isIntron() || variantEffect.isSpliceSiteCore()) {
+			int start, end;
+
+			switch (variant.getVariantType()) {
 			case SNP:
 			case MNP:
-				return posIntron(seqChange.getStart());
+				return posIntron(variant.getStart());
 
 			case INS:
-				String p = posIntron(seqChange.getStart());
-				if (p == null) return null;
-				int next = seqChange.getStart() + (marker.isStrandPlus() ? 1 : -1);
-				String pNext = posIntron(next);
-				if (pNext == null) return null;
-				return p + "_" + pNext;
+				start = variant.getStart();
+				end = variant.getStart() + (marker.isStrandPlus() ? 1 : -1);
+				break;
 
 			case DEL:
-				p = posIntron(seqChange.getStart());
-				if (p == null) return null;
-				pNext = posIntron(seqChange.getEnd());
-				if (pNext == null) return null;
-				return p + "_" + pNext;
+			case MIXED:
+				start = variant.getStart();
+				end = variant.getEnd();
+				break;
+
+			case INTERVAL:
+				return "";
 
 			default:
-				return null;
+				throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 			}
+
+			// Calculate positions and create string
+			String posStart = posIntron(start);
+			if (posStart == null) return null;
+			String posEnd = posIntron(end);
+			if (posEnd == null) return null;
+
+			if (posStart.equals(posEnd)) return posStart;
+			return tr.isStrandPlus() ? posStart + "_" + posEnd : posEnd + "_" + posStart;
 		}
+
+		if (tr == null) return null;
+		String posPrepend = "";
 
 		// Exon position
-		int codonNum = changeEffect.getCodonNum();
-		if (codonNum < 0) return null;
-		int seqPos = codonNum * 3 + changeEffect.getCodonIndex() + 1;
+		int posStart = -1, posEnd = -1;
 
-		switch (seqChange.getChangeType()) {
+		int variantPos = tr.isStrandPlus() ? variant.getStart() : variant.getEnd();
+		if (variantEffect.isUtr3()) {
+			// We are after stop codon, coordinates must be '*1', '*2', etc.
+			int pos = tr.baseNumberPreMRna(variantPos);
+			int posStop = tr.baseNumberPreMRna(tr.getCdsEnd());
+			posStart = Math.abs(pos - posStop);
+			posPrepend = "*";
+		} else if (variantEffect.isUtr5()) {
+			// We are before TSS, coordinates must be '-1', '-2', etc.
+			int pos = tr.baseNumberPreMRna(variantPos);
+			int posTss = tr.baseNumberPreMRna(tr.getCdsStart());
+			posStart = Math.abs(pos - posTss);
+			posPrepend = "-";
+		} else {
+			posStart = tr.baseNumberCds(variantPos, false) + 1;
+		}
+
+		// Could not find dna position in transcript?
+		if (posStart <= 0) return null;
+
+		switch (variant.getVariantType()) {
 		case SNP:
 		case MNP:
-			return "" + seqPos;
+			return posPrepend + posStart;
 
 		case INS:
-			return seqPos + "_" + (seqPos + 1);
+			posEnd = posStart + 1;
+			break;
 
 		case DEL:
-			String aaOld = changeEffect.getAaOld();
-			String aaNew = changeEffect.getAaNew();
-			if (aaOld == null || aaOld.isEmpty() || aaOld.equals("-")) return null;
-			if (aaNew == null || aaNew.isEmpty() || aaNew.equals("-")) aaNew = "";
+		case MIXED:
+			posEnd = posStart + variant.size() - 1;
+			break;
 
-			int end = seqPos + (aaOld.length() - aaNew.length());
-			return seqPos + "_" + end;
+		case INTERVAL:
+			return "";
 
 		default:
-			return null;
+			throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 		}
+
+		if (posStart == posEnd) return posPrepend + posStart;
+		return posPrepend + posStart + "_" + posPrepend + posEnd;
+
 	}
 
 	/**
 	 * Intronic position
 	 */
 	protected String posIntron(int pos) {
-		Intron intron = (Intron) changeEffect.getMarker();
-		if (intron == null) return null;
+		Marker marker = variantEffect.getMarker();
+		Intron intron = (Intron) marker.findParent(Intron.class);
+		if (intron == null) {
+			Gpr.debug("variantEffect: " + variantEffect //
+					+ "\n\tMarker: " + variantEffect.getMarker() //
+			);
+			return null;
+		}
 
 		// Jump to closest exon position
 		// Ref:
@@ -158,7 +206,7 @@ public class HgvsDna extends Hgvs {
 		int cdsRight = Math.max(tr.getCdsStart(), tr.getCdsEnd());
 		if ((posExon >= cdsLeft) && (posExon <= cdsRight)) {
 			int distExonBase = tr.baseNumberCds(posExon, false) + 1;
-			return distExonBase + posExonStr + exonDistance;
+			return distExonBase + (exonDistance > 0 ? posExonStr + exonDistance : "");
 		}
 
 		// Left side of coding part
@@ -167,25 +215,25 @@ public class HgvsDna extends Hgvs {
 			int cdnaStart = tr.baseNumberPreMRna(cdsLeft); // tr.getCdsStart());
 			int utrDistance = Math.abs(cdnaStart - cdnaPos);
 			String utrStr = tr.isStrandPlus() ? "-" : "*";
-			return utrStr + utrDistance + posExonStr + exonDistance;
+			return utrStr + utrDistance + (exonDistance > 0 ? posExonStr + exonDistance : "");
 		}
 
 		// Right side of coding part
 		int cdnaEnd = tr.baseNumberPreMRna(cdsRight); // tr.getCdsEnd());
 		int utrDistance = Math.abs(cdnaEnd - cdnaPos);
 		String utrStr = tr.isStrandPlus() ? "*" : "-";
-		return utrStr + utrDistance + posExonStr + exonDistance;
+		return utrStr + utrDistance + (exonDistance > 0 ? posExonStr + exonDistance : "");
 	}
 
 	@Override
 	public String toString() {
-		if (seqChange == null) return null;
+		if (variant == null) return null;
 
 		String pos = pos();
 		if (pos == null) return null;
 
 		String type = "";
-		switch (seqChange.getChangeType()) {
+		switch (variant.getVariantType()) {
 		case INS:
 			type = "ins";
 			break;
@@ -194,8 +242,15 @@ public class HgvsDna extends Hgvs {
 			type = "del";
 			break;
 
-		default:
+		case MNP:
+		case SNP:
+		case MIXED:
+		case INTERVAL:
+			type = "";
 			break;
+
+		default:
+			throw new RuntimeException("Unimplemented method for variant type " + variant.getVariantType());
 		}
 
 		return codingPrefix() + pos + type + dnaBaseChange();

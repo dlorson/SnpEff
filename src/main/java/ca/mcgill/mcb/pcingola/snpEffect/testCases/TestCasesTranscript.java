@@ -14,16 +14,20 @@ import ca.mcgill.mcb.pcingola.interval.Utr5prime;
 import ca.mcgill.mcb.pcingola.snpEffect.Config;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
 import ca.mcgill.mcb.pcingola.snpEffect.factory.SnpEffPredictorFactoryRand;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 import ca.mcgill.mcb.pcingola.util.Timer;
 
 /**
- * Test random SNP changes 
- * 
+ * Test random SNP changes
+ *
  * @author pcingola
  */
 public class TestCasesTranscript extends TestCase {
 
+	public static int N = 1000;
 	boolean debug = false;
+	boolean verbose = false;
+
 	Random rand;
 	Config config;
 	Genome genome;
@@ -79,15 +83,16 @@ public class TestCasesTranscript extends TestCase {
 	}
 
 	public void test_CdsPos() {
-		int N = 1000;
+		Gpr.debug("Test");
 
-		// Test N times: 
+		// Test N times:
 		//		- Create a random gene transcript, exons
 		// 		- Cal
 		for (int iter = 0; iter < N; iter++) {
 			initSnpEffPredictor();
 			if (debug) System.out.println("Test CDS pos iteration: " + iter + "\n" + transcript);
-			else System.out.println("Test CDS pos iteration: " + iter + "\t" + transcript.getStrand() + "\t" + transcript.cds());
+			else if (verbose) System.out.println("Test CDS pos iteration: " + iter + "\t" + transcript.getStrand() + "\t" + transcript.cds());
+			else Gpr.showMark(iter + 1, 1);
 
 			int cdsBaseNum = 0;
 			int cds2pos[] = transcript.baseNumberCds2Pos();
@@ -112,6 +117,7 @@ public class TestCasesTranscript extends TestCase {
 	 * Simple CDS start & CSD end case
 	 */
 	public void test_cdsStartEnd_1() {
+		Gpr.debug("Test");
 		Gene g = new Gene(chromosome, 0, 100, false, "g1", "g1", "");
 		Transcript tr = new Transcript(g, 10, 100, false, "tr1");
 
@@ -125,14 +131,15 @@ public class TestCasesTranscript extends TestCase {
 
 		Assert.assertEquals(10, tr.getCdsStart());
 		Assert.assertEquals(100, tr.getCdsEnd());
-		System.out.println("Transcript : " + tr);
-		System.out.println("CDS.start: " + tr.getCdsStart() + "\tCDS.end: " + tr.getCdsEnd());
+		if (verbose) System.out.println("Transcript : " + tr);
+		if (verbose) System.out.println("CDS.start: " + tr.getCdsStart() + "\tCDS.end: " + tr.getCdsEnd());
 	}
 
 	/**
 	 * CDS start & CSD end case where transcript is ALL UTR (nothing codes, presumably because of a database annotation error)
 	 */
 	public void test_cdsStartEnd_2() {
+		Gpr.debug("Test");
 		Gene g = new Gene(chromosome, 10, 100, false, "g1", "g1", "");
 		Transcript tr = new Transcript(g, 10, 100, false, "tr1");
 
@@ -154,19 +161,20 @@ public class TestCasesTranscript extends TestCase {
 
 		Assert.assertEquals(10, tr.getCdsStart());
 		Assert.assertEquals(10, tr.getCdsEnd());
-		System.out.println("Transcript : " + tr);
-		System.out.println("CDS.start: " + tr.getCdsStart() + "\tCDS.end: " + tr.getCdsEnd());
+		if (verbose) System.out.println("Transcript : " + tr);
+		if (verbose) System.out.println("CDS.start: " + tr.getCdsStart() + "\tCDS.end: " + tr.getCdsEnd());
 	}
 
 	public void test_mRnaSequence() {
+		Gpr.debug("Test");
 		String genome = "testHg3766Chr1";
 		Config config = new Config(genome);
 
-		Timer.showStdErr("Loading genome");
+		if (verbose) Timer.showStdErr("Loading genome");
 		SnpEffectPredictor sep = config.loadSnpEffectPredictor();
-		Timer.showStdErr("Building interval forest");
+		if (verbose) Timer.showStdErr("Building interval forest");
 		sep.buildForest();
-		Timer.showStdErr("Done");
+		if (verbose) Timer.showStdErr("Done");
 
 		for (Gene gene : sep.getGenome().getGenes()) {
 			for (Transcript tr : gene) {

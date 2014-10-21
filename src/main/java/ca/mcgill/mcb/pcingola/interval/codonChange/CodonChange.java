@@ -2,14 +2,18 @@ package ca.mcgill.mcb.pcingola.interval.codonChange;
 
 import java.util.List;
 
+import ca.mcgill.mcb.pcingola.codons.CodonTable;
 import ca.mcgill.mcb.pcingola.interval.Exon;
+import ca.mcgill.mcb.pcingola.interval.Marker;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 
 /**
- * Analyze codon changes based on a SeqChange and a Transcript
- * 
+ * Analyze codon changes based on a variant and a Transcript
+ *
  * @author pcingola
  */
 public class CodonChange {
@@ -19,52 +23,97 @@ public class CodonChange {
 
 	boolean returnNow = false; // Can we return immediately after calculating the first 'codonChangeSingle()'?
 	boolean requireNetCdsChange = false;
-	Variant seqChange;
+	Variant variant;
 	Transcript transcript;
 	Exon exon = null;
-	VariantEffects changeEffects;
-	int codonNum = -1;
-	int codonIndex = -1;
-	String codonsOld = ""; // Old codons (before change)
-	String codonsNew = ""; // New codons (after change)
-	String aaOld = ""; // Old amino acids (before change)
-	String aaNew = ""; // New amino acids (after change)
+	VariantEffects variantEffects;
+	int codonStartNum = -1;
+	int codonStartIndex = -1;
+	String codonsRef = ""; // REF codons (without variant)
+	String codonsAlt = ""; // ALT codons (after variant is applied)
 	String netCdsChange = "";
 
-	public CodonChange(Variant seqChange, Transcript transcript, VariantEffects changeEffects) {
-		this.seqChange = seqChange;
+	/**
+	 * Create a specific codon change for a variant
+	 */
+	public static CodonChange factory(Variant variant, Transcript transcript, VariantEffects variantEffects) {
+		switch (variant.getVariantType()) {
+		case SNP:
+			return new CodonChangeSnp(variant, transcript, variantEffects);
+		case INS:
+			return new CodonChangeIns(variant, transcript, variantEffects);
+		case DEL:
+			return new CodonChangeDel(variant, transcript, variantEffects);
+		case MNP:
+			return new CodonChangeMnp(variant, transcript, variantEffects);
+		case MIXED:
+			return new CodonChangeMixed(variant, transcript, variantEffects);
+		case INTERVAL:
+			return new CodonChangeInterval(variant, transcript, variantEffects);
+		default:
+			throw new RuntimeException("Unimplemented factory for variant: " + variant);
+		}
+	}
+
+	protected CodonChange(Variant variant, Transcript transcript, VariantEffects variantEffects) {
 		this.transcript = transcript;
-		this.changeEffects = changeEffects;
+		this.variantEffects = variantEffects;
+		this.variant = variant;
 	}
 
 	/**
-	 * Calculate all possible codon changes
-	 *  
-	 * @param seqChange
-	 * @param changeEffect
-	 * @return
+	 * Calculate additional effect due to codon changes
+	 * E.g. A frame-shift that also affects a stop codon
 	 */
-	public void calculate() {
-		// Split each seqChange into it's multiple options
-		for (int i = 0; i < seqChange.getChangeOptionCount(); i++) {
-			// Create a new SeqChange for this option, calculate codonChange for this seqChangeOption and add result to the list
-			Variant seqChangeNew = seqChange.getSeqAltOption(i);
-			if (seqChangeNew != null) {
-				// Create a specific codon change and calculate changes
-				CodonChange codonChange = factory(seqChangeNew, transcript, changeEffects);
-				codonChange.codonChange(); // Calculate codon change and add them to the list
+	public EffectType additionalEffect(String codonsOld, String codonsNew, int codonNum, int codonIndex, String aaOld, String aaNew) {
+		EffectType newEffectType = null;
+
+		CodonTable codonTable = transcript.codonTable();
+
+		if (variant.isSnp() || variant.isMnp()) {
+			// SNM and MNP effects
+			if (aaOld.equals(aaNew)) {
+
+				// Same AA: Synonymous coding
+				if ((codonNum == 0) && codonTable.isStartFirst(codonsOld)) {
+					// It is in the first codon (which also is a start codon)
+					if (codonTable.isStartFirst(codonsNew)) newEffectType = EffectType.SYNONYMOUS_START; // The new codon is also a start codon => SYNONYMOUS_START
+					else newEffectType = EffectType.START_LOST; // The AA is the same, but the codon is not a start codon => start lost
+				} else if (codonTable.isStop(codonsOld)) {
+					// Stop codon
+					if (codonTable.isStop(codonsNew)) newEffectType = EffectType.SYNONYMOUS_STOP; // New codon is also a stop => SYNONYMOUS_STOP
+					else newEffectType = EffectType.STOP_LOST; // New codon is not a stop, the we've lost a stop
+				} else newEffectType = EffectType.SYNONYMOUS_CODING; // All other cases are just SYNONYMOUS_CODING
+
+			} else {
+
+				// Different AA: Non-synonymous coding
+				if ((codonNum == 0) && codonTable.isStartFirst(codonsOld)) {
+					// It is in the first codon (which also is a start codon)
+					if (codonTable.isStartFirst(codonsNew)) newEffectType = EffectType.NON_SYNONYMOUS_START; // Non-synonymous mutation on first codon => start lost
+					else newEffectType = EffectType.START_LOST; // Non-synonymous mutation on first codon => start lost
+				} else if (codonTable.isStop(codonsOld)) {
+					// Stop codon
+					if (codonTable.isStop(codonsNew)) newEffectType = EffectType.NON_SYNONYMOUS_STOP; // Notice: This should never happen for SNPs! (for some reason I removed this comment at some point and that create some confusion): http://www.biostars.org/post/show/51352/in-snpeff-impact-what-is-difference-between-stop_gained-and-non-synonymous_stop/
+					else newEffectType = EffectType.STOP_LOST;
+				} else if (codonTable.isStop(codonsNew)) newEffectType = EffectType.STOP_GAINED;
+				else newEffectType = EffectType.NON_SYNONYMOUS_CODING; // All other cases are just NON_SYN
+
 			}
+		} else {
+			// Add a new effect in some cases
+			if ((codonNum == 0) && codonTable.isStartFirst(codonsOld) && !codonTable.isStartFirst(codonsNew)) newEffectType = EffectType.START_LOST;
+			else if (codonTable.isStop(codonsOld) && !codonTable.isStop(codonsNew)) newEffectType = EffectType.STOP_LOST;
+			else if (!codonTable.isStop(codonsOld) && codonTable.isStop(codonsNew)) newEffectType = EffectType.STOP_GAINED;
 		}
 
-		return;
+		return newEffectType;
 	}
 
 	/**
 	 * Calculate base number in a cds where 'pos' is
-	 * @param pos
-	 * @return
 	 */
-	int cdsBaseNumber(int pos) {
+	protected int cdsBaseNumber(int pos) {
 		int cdsbn = transcript.baseNumberCds(pos, true);
 
 		// Does not intersect the transcript?
@@ -85,16 +134,19 @@ public class CodonChange {
 
 	/**
 	 * Calculate a list of codon changes
-	 * @return
 	 */
-	void codonChange() {
-		if (!transcript.intersects(seqChange)) return;
+	public void codonChange() {
+		if (!transcript.intersects(variant)) return;
 
 		// Get coding start (after 5 prime UTR)
 		int cdsStart = transcript.getCdsStart();
 
 		// We may have to calculate 'netCdsChange', which is the effect on the CDS
 		netCdsChange = netCdsChange();
+		if (requireNetCdsChange && netCdsChange.isEmpty()) { // This can happen on mixed changes where the 'InDel' part lies outside the transcript's exons
+			codonsRef = codonsAlt = "";
+			return;
+		}
 
 		//---
 		// Concatenate all exons
@@ -103,29 +155,31 @@ public class CodonChange {
 		List<Exon> exons = transcript.sortedStrand();
 		for (Exon exon : exons) {
 			this.exon = exon;
-			if (exon.intersects(seqChange)) {
-				int cdsBaseInExon; // cdsBaseInExon: base number relative to the beginning of the coding part of this exon (i.e. excluding 5'UTRs)
+			if (exon.intersects(variant)) {
+				int cdsBaseInExon = -1; // cdsBaseInExon: base number relative to the beginning of the coding part of this exon (i.e. excluding 5'UTRs)
 
 				if (transcript.isStrandPlus()) {
-					int firstSeqChangeBaseInExon = Math.max(seqChange.getStart(), Math.max(exon.getStart(), cdsStart));
-					cdsBaseInExon = firstSeqChangeBaseInExon - Math.max(exon.getStart(), cdsStart);
+					int firstvariantBaseInExon = Math.max(variant.getStart(), Math.max(exon.getStart(), cdsStart));
+					cdsBaseInExon = firstvariantBaseInExon - Math.max(exon.getStart(), cdsStart);
 				} else {
-					int lastSeqChangeBaseInExon = Math.min(seqChange.getEnd(), Math.min(exon.getEnd(), cdsStart));
-					cdsBaseInExon = Math.min(exon.getEnd(), cdsStart) - lastSeqChangeBaseInExon;
+					int lastvariantBaseInExon = Math.min(variant.getEnd(), Math.min(exon.getEnd(), cdsStart));
+					cdsBaseInExon = Math.min(exon.getEnd(), cdsStart) - lastvariantBaseInExon;
 				}
 
 				if (cdsBaseInExon < 0) cdsBaseInExon = 0;
 
 				// Get codon number and index within codon (where seqChage is pointing)
-				codonNum = (firstCdsBaseInExon + cdsBaseInExon) / CODON_SIZE;
-				codonIndex = (firstCdsBaseInExon + cdsBaseInExon) % CODON_SIZE;
+				if (codonStartNum < 0) {
+					codonStartNum = (firstCdsBaseInExon + cdsBaseInExon) / CODON_SIZE;
+					codonStartIndex = (firstCdsBaseInExon + cdsBaseInExon) % CODON_SIZE;
+				}
 
 				// Use appropriate method to calculate codon change
 				boolean hasChanged = false; // Was there any change?
 				hasChanged = codonChangeSingle(exon);
 
 				// Any change? => Add change to list
-				if (hasChanged) changeEffects.setMarker(exon); // It is affecting this exon, so we set the marker
+				if (hasChanged) variantEffects.setMarker(exon); // It is affecting this exon, so we set the marker
 
 				// Can we return immediately?
 				if (returnNow) return;
@@ -140,37 +194,33 @@ public class CodonChange {
 
 	/**
 	 * Calculate the effect of a single change type: SNP, MNP, INS, DEL
-	 * @return
 	 */
-	boolean codonChangeSingle(Exon exon) {
-		throw new RuntimeException("Unimplemented method for this thype of seqChange: " + seqChange.getType());
+	protected boolean codonChangeSingle(Exon exon) {
+		throw new RuntimeException("Unimplemented method codonChangeSingle() for\n\t\tVariant type : " + variant.getType() + "\n\t\tClass        : " + getClass().getSimpleName() + "\n\t\tVariant      : " + variant);
 	}
 
 	/**
 	 * Calculate new codons
-	 * @return
 	 */
-	String codonsNew() {
+	public String codonsAlt() {
 		throw new RuntimeException("Unimplemented method for this thype of CodonChange: " + this.getClass().getSimpleName());
 	}
 
 	/**
-	 * Calculate old codons
-	 * @return
+	 * Calculate 'reference' codons
 	 */
-	public String codonsOld() {
-		return codonsOld(1);
+	public String codonsRef() {
+		return codonsRef(1);
 	}
 
 	/**
-	 * Calculate old codons
-	 * @return
+	 * Calculate 'reference' codons
 	 */
-	protected String codonsOld(int numCodons) {
+	protected String codonsRef(int numCodons) {
 		String cds = transcript.cds();
 		String codon = "";
 
-		int start = codonNum * CodonChange.CODON_SIZE;
+		int start = codonStartNum * CodonChange.CODON_SIZE;
 		int end = start + numCodons * CodonChange.CODON_SIZE;
 
 		int len = cds.length();
@@ -188,37 +238,56 @@ public class CodonChange {
 	}
 
 	/**
-	 * Create a specific codon change for a seqChange
-	 * @param seqChange
-	 * @param transcript
-	 * @param changeEffects
-	 * @return
+	 * Add an effect
 	 */
-	CodonChange factory(Variant seqChange, Transcript transcript, VariantEffects changeEffects) {
-		if (seqChange.isSnp()) return new CodonChangeSnp(seqChange, transcript, changeEffects);
-		if (seqChange.isIns()) return new CodonChangeIns(seqChange, transcript, changeEffects);
-		if (seqChange.isDel()) return new CodonChangeDel(seqChange, transcript, changeEffects);
-		if (seqChange.isMnp()) return new CodonChangeMnp(seqChange, transcript, changeEffects);
-		if (seqChange.isInterval()) return new CodonChangeInterval(seqChange, transcript, changeEffects);
-		throw new RuntimeException("Unimplemented factory for SeqChange: " + seqChange);
+	protected VariantEffect effect(Marker marker, EffectType effectType, String message, String codonsOld, String codonsNew, int codonNum, int codonIndex, boolean allowReplace) {
+		// Create and add variant affect
+		VariantEffect varEff = new VariantEffect(variant, variantEffects.getVariantRef(), marker, effectType, effectType.effectImpact(), message, codonsOld, codonsNew, codonNum, codonIndex);
+		variantEffects.addEffect(varEff);
+
+		// Are there any additional effects? Sometime a new effect arises from setting codons (e.g. FRAME_SHIFT disrupts a STOP codon)
+		EffectType addEffType = additionalEffect(codonsOld, codonsNew, codonNum, codonIndex, varEff.getAaOld(), varEff.getAaNew());
+		if (addEffType != null && addEffType != effectType) {
+			if (allowReplace && addEffType.compareTo(effectType) < 0) {
+				varEff.setEffectType(addEffType); // Replace main effect
+				varEff.setEffectImpact(addEffType.effectImpact()); // Replace main impact
+			} else {
+				varEff.addEffectType(addEffType); // Add to list
+				varEff.addEffectImpact(addEffType.effectImpact()); // Add impact to list
+			}
+		}
+
+		return varEff;
 	}
 
 	/**
 	 * We may have to calculate 'netCdsChange', which is the effect on the CDS
 	 * Note: A deletion or a MNP might affect several exons
-	 * @return
 	 */
 	protected String netCdsChange() {
 		if (!requireNetCdsChange) return "";
 
-		if (seqChange.size() > 1) {
+		if (variant.size() > 1) {
 			StringBuilder sb = new StringBuilder();
 			for (Exon exon : transcript.sortedStrand())
-				sb.append(seqChange.netChange(exon));
+				sb.append(variant.netChange(exon));
 			return sb.toString();
 		}
 
-		return seqChange.netChange(transcript.isStrandMinus());
+		return variant.netChange(transcript.isStrandMinus());
 	}
 
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+
+		sb.append("Transcript : " + transcript.getId() + "\n");
+		sb.append("Variant    : " + variant + "\n");
+		sb.append("Codonss    : " + codonsRef + "/" + codonsAlt + "\tnum: " + codonStartNum + "\tidx: " + codonStartIndex + "\n");
+		sb.append("Effects    :\n");
+		for (VariantEffect veff : variantEffects)
+			sb.append("\t" + veff.getEffectTypeString(false) + "\t" + veff.getCodonsOld() + "/" + veff.getCodonsNew() + "\t" + veff.getAaOld() + "/" + veff.getAaNew() + "\n");
+
+		return sb.toString();
+	}
 }

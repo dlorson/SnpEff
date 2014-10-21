@@ -19,7 +19,7 @@ import ca.mcgill.mcb.pcingola.akka.vcf.VcfWorkQueue;
 import ca.mcgill.mcb.pcingola.fileIterator.BedFileIterator;
 import ca.mcgill.mcb.pcingola.fileIterator.VariantFileIterator;
 import ca.mcgill.mcb.pcingola.fileIterator.VcfFileIterator;
-import ca.mcgill.mcb.pcingola.filter.ChangeEffectFilter;
+import ca.mcgill.mcb.pcingola.filter.VariantEffectFilter;
 import ca.mcgill.mcb.pcingola.interval.Marker;
 import ca.mcgill.mcb.pcingola.interval.Markers;
 import ca.mcgill.mcb.pcingola.interval.Variant;
@@ -28,10 +28,10 @@ import ca.mcgill.mcb.pcingola.outputFormatter.BedAnnotationOutputFormatter;
 import ca.mcgill.mcb.pcingola.outputFormatter.BedOutputFormatter;
 import ca.mcgill.mcb.pcingola.outputFormatter.OutputFormatter;
 import ca.mcgill.mcb.pcingola.outputFormatter.VcfOutputFormatter;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.SnpEffectPredictor;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectImpact;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.snpEffect.commandLine.eff.MasterEff;
 import ca.mcgill.mcb.pcingola.stats.CountByType;
@@ -67,28 +67,27 @@ public class SnpEffCmdEff extends SnpEff {
 	public static final int SHOW_EVERY = 100000;
 
 	boolean cancer = false; // Perform cancer comparisons
-	boolean supressOutput = false; // Only used for debugging purposes
+	boolean chromoPlots = true; // Create mutations by chromosome plots?
+	boolean createCsvSummary = false; // Use a CSV as output summary
 	boolean createSummary = true; // Do not create summary output file
+	boolean lossOfFunction = true; // Create loss of function LOF tag?
+	boolean useGeneId = false; // Use gene ID instead of gene name (VCF output)
 	boolean useHgvs = true; // Use Hgvs notation
 	boolean useLocalTemplate = false; // Use template from 'local' file instead of 'jar' (this is only used for development and debugging)
-	boolean useSequenceOntology = true; // Use Sequence Ontology terms
 	boolean useOicr = false; // Use OICR tag
-	boolean chromoPlots = true; // Create mutations by chromosome plots?
-	boolean lossOfFunction = false; // Create loss of function LOF tag?
-	boolean useGeneId = false; // Use gene ID instead of gene name (VCF output)
-	boolean createCsvSummary = false; // Use a CSV as output summary
+	boolean useSequenceOntology = true; // Use Sequence Ontology terms
 	int totalErrs = 0;
 	long countInputLines = 0, countVariants = 0, countEffects = 0; // , countVariantsFilteredOut = 0;
+	String cancerSamples = null;
 	String chrStr = "";
 	String inputFile = ""; // Input file
-	ArrayList<String> inputFiles;
 	String summaryFile; // Summary output file
 	String summaryGenesFile; // Gene table file
-	String cancerSamples = null;
 	InputFormat inputFormat = InputFormat.VCF; // Format use in input files
 	OutputFormat outputFormat = OutputFormat.VCF; // Output format
-	ChangeEffectFilter variantEffectResutFilter; // Filter prediction results
+	VariantEffectFilter variantEffectResutFilter; // Filter prediction results
 	ArrayList<String> filterIntervalFiles;// Files used for filter intervals
+	ArrayList<String> inputFiles;
 	IntervalForest filterIntervals; // Filter only variants that match these intervals
 	VariantStats variantStats;
 	VariantEffectStats variantEffectStats;
@@ -99,7 +98,7 @@ public class SnpEffCmdEff extends SnpEff {
 		super();
 		chrStr = ""; // Default: Don't show 'chr' before chromosome
 		inputFile = ""; // variant input file
-		variantEffectResutFilter = new ChangeEffectFilter(); // Filter prediction results
+		variantEffectResutFilter = new VariantEffectFilter(); // Filter prediction results
 		filterIntervalFiles = new ArrayList<String>(); // Files used for filter intervals
 		filterIntervals = new IntervalForest(); // Filter only variants that match these intervals
 		summaryFile = DEFAULT_SUMMARY_FILE;
@@ -108,9 +107,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Analyze which comparisons to make in cancer genomes
-	 * @param vcfEntry
-	 * @param pedigree
-	 * @return
 	 */
 	Set<Tuple<Integer, Integer>> compareCancerGenotypes(VcfEntry vcfEntry, List<PedigreeEnrty> pedigree) {
 		HashSet<Tuple<Integer, Integer>> comparisons = new HashSet<Tuple<Integer, Integer>>();
@@ -172,8 +168,6 @@ public class SnpEffCmdEff extends SnpEff {
 	/**
 	 * Iterate on all inputs and calculate effects.
 	 * Note: This is used for all input formats except VCF, which has a different iteration modality
-	 *
-	 * @param outputFormatter
 	 */
 	void iteratevariant(String inputFile, OutputFormatter outputFormatter) {
 		SnpEffectPredictor snpEffectPredictor = config.getSnpEffectPredictor();
@@ -190,7 +184,7 @@ public class SnpEffCmdEff extends SnpEff {
 			try {
 				countInputLines++;
 
-				countVariants += variant.getChangeOptionCount();
+				countVariants++;
 				if (verbose && (countVariants % SHOW_EVERY == 0)) Timer.showStdErr("\t" + countVariants + " variants");
 
 				// Does it pass the filter? => Analyze
@@ -232,8 +226,6 @@ public class SnpEffCmdEff extends SnpEff {
 	 *
 	 * TODO: Effect analysis should be in a separate class, so we can easily reuse it for single or mutli-threaded modes.
 	 *       SnpEffCmdEff should only parse command line, and then invoke the other class (now everything is here, it's a mess)
-	 *
-	 * @param outputFormatter
 	 */
 	void iterateVcf(String inputFile, OutputFormatter outputFormatter) {
 		SnpEffectPredictor snpEffectPredictor = config.getSnpEffectPredictor();
@@ -287,7 +279,7 @@ public class SnpEffCmdEff extends SnpEff {
 				boolean impact = false; // Does this entry have an impact (other than MODIFIER)?
 				List<Variant> variants = vcfEntry.variants();
 				for (Variant variant : variants) {
-					countVariants += variant.getChangeOptionCount();
+					countVariants++;
 					if (verbose && (countVariants % SHOW_EVERY == 0)) Timer.showStdErr("\t" + countVariants + " variants");
 
 					// Perform basic statistics about this variant
@@ -369,15 +361,15 @@ public class SnpEffCmdEff extends SnpEff {
 		vcfFile.close();
 
 		// Show errors and warnings
-		if (!errByType.isEmpty()) System.err.println("\nERRORS: Some errors were detected\nError type\tNumber of errors\n" + errByType + "\n");
-		if (!warnByType.isEmpty()) System.err.println("\nWARNINGS: Some warning were detected\nWarning type\tNumber of warnings\n" + warnByType + "\n");
+		if (verbose) {
+			if (!errByType.isEmpty()) System.err.println("\nERRORS: Some errors were detected\nError type\tNumber of errors\n" + errByType + "\n");
+			if (!warnByType.isEmpty()) System.err.println("\nWARNINGS: Some warning were detected\nWarning type\tNumber of warnings\n" + warnByType + "\n");
+		}
 	}
 
 	/**
 	 * Multi-threaded iteration on VCF inputs and calculates effects.
 	 * Note: This is used only on input format VCF, which has a different iteration modality
-	 *
-	 * @param outputFormatter
 	 */
 	void iterateVcfMulti(String inputFile, final OutputFormatter outputFormatter) {
 		if (verbose) Timer.showStdErr("Running multi-threaded mode (numThreads=" + numWorkers + ").");
@@ -412,8 +404,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Create a suitable output file name
-	 * @param inputFile
-	 * @return
 	 */
 	String outputFile(String inputFile) {
 		// Remove GZ extension
@@ -456,7 +446,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Parse command line arguments
-	 * @param args
 	 */
 	@Override
 	public void parseArgs(String[] args) {
@@ -481,9 +470,20 @@ public class SnpEffCmdEff extends SnpEff {
 
 						// if (outFor.equals("TXT")) outputFormat = OutputFormat.TXT;
 						if (outFor.equals("VCF")) outputFormat = OutputFormat.VCF;
-						else if (outFor.equals("GATK")) outputFormat = OutputFormat.GATK;
-						else if (outFor.equals("BED")) outputFormat = OutputFormat.BED;
-						else if (outFor.equals("BEDANN")) outputFormat = OutputFormat.BEDANN;
+						else if (outFor.equals("GATK")) {
+							outputFormat = OutputFormat.GATK;
+							useSequenceOntology = false;
+							useHgvs = false;
+							nextProt = false;
+							motif = false;
+
+							// GATK doesn't support SPLICE_REGION at the moment.
+							// Set parameters to zero so that splcie regions are not created.
+							spliceRegionExonSize = spliceRegionIntronMin = spliceRegionIntronMax = 0;
+						} else if (outFor.equals("BED")) {
+							outputFormat = OutputFormat.BED;
+							lossOfFunction = false;
+						} else if (outFor.equals("BEDANN")) outputFormat = OutputFormat.BEDANN;
 						else usage("Unknown output file format '" + outFor + "'");
 					}
 				} else if ((arg.equals("-s") || arg.equalsIgnoreCase("-stats"))) {
@@ -499,7 +499,6 @@ public class SnpEffCmdEff extends SnpEff {
 					if (summaryFile.equals(DEFAULT_SUMMARY_FILE)) summaryFile = DEFAULT_SUMMARY_CSV_FILE;
 				} else if (arg.equalsIgnoreCase("-chr")) chrStr = args[++i];
 				else if (arg.equalsIgnoreCase("-useLocalTemplate")) useLocalTemplate = true; // Undocumented option (only used for development & debugging)
-				else if (arg.equalsIgnoreCase("-noOut")) supressOutput = true; // Undocumented option (only used for development & debugging)
 				else if (arg.equalsIgnoreCase("-noChromoPlots")) chromoPlots = false;
 				//---
 				// Annotation options
@@ -533,6 +532,7 @@ public class SnpEffCmdEff extends SnpEff {
 						} else if (inFor.equals("BED")) {
 							inputFormat = InputFormat.BED;
 							outputFormat = OutputFormat.BED;
+							lossOfFunction = false;
 						} else usage("Unknown input file format '" + inFor + "'");
 					} else usage("Missing input format in command line option '-i'");
 				}
@@ -601,8 +601,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Read a file after checking for some common error conditions
-	 * @param fileName
-	 * @return
 	 */
 	String readFile(String fileName) {
 		File file = new File(fileName);
@@ -613,7 +611,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Read a filter custom interval file
-	 * @param intFile
 	 */
 	int readFilterIntFile(String intFile) {
 		Markers markers = loadMarkers(intFile);
@@ -624,9 +621,6 @@ public class SnpEffCmdEff extends SnpEff {
 
 	/**
 	 * Read pedigree either from VCF header or from cancerSample file
-	 *
-	 * @param vcfFile
-	 * @return
 	 */
 	List<PedigreeEnrty> readPedigree(VcfFileIterator vcfFile) {
 		List<PedigreeEnrty> pedigree = null;
@@ -670,8 +664,7 @@ public class SnpEffCmdEff extends SnpEff {
 	 */
 	@Override
 	public boolean run() {
-		run(false);
-		return true;
+		return run(false) != null;
 	}
 
 	/**
@@ -711,18 +704,15 @@ public class SnpEffCmdEff extends SnpEff {
 			if (verbose) Timer.showStdErr("done.");
 		}
 
-		// Read regulation tracks
-		for (String regTrack : regulationTracks)
-			loadRegulationTrack(regTrack);
-
 		// Store VCF results in a list?
 		if (createList) vcfEntriesDebug = new ArrayList<VcfEntry>();
 
 		// Predict
+		boolean ok = true;
 		if (verbose) Timer.showStdErr("Predicting variants");
 		if (inputFiles == null) {
 			// Single input file (normal operations)
-			runAnalysis(inputFile, null);
+			ok = runAnalysis(inputFile, null);
 		} else {
 			// Multiple input files
 			for (String inputFile : inputFiles) {
@@ -732,19 +722,22 @@ public class SnpEffCmdEff extends SnpEff {
 						+ "\n\tOutput  : '" + outputFile + "'" //
 						+ (createSummary ? "\n\tSummary : '" + summaryFile + "'" : "") //
 				);
-				runAnalysis(inputFile, outputFile);
+				ok &= runAnalysis(inputFile, outputFile);
 			}
 		}
 		if (verbose) Timer.showStdErr("done.");
 
+		if (!ok) return null;
+		if (vcfEntriesDebug == null) return new ArrayList<VcfEntry>();
 		return vcfEntriesDebug;
 	}
 
 	/**
 	 * Calculate the effect of variants and show results
-	 * @param snpEffFile
 	 */
-	public void runAnalysis(String inputFile, String outputFile) {
+	public boolean runAnalysis(String inputFile, String outputFile) {
+		boolean ok = true;
+
 		// Reset all counters
 		totalErrs = 0;
 		countInputLines = countVariants = countEffects = 0; // = countVariantsFilteredOut = 0;
@@ -785,7 +778,7 @@ public class SnpEffCmdEff extends SnpEff {
 		outputFormatter.setVersion(VERSION_NO_NAME);
 		outputFormatter.setCommandLineStr(commandLineStr(false));
 		outputFormatter.setChangeEffectResutFilter(variantEffectResutFilter);
-		outputFormatter.setSupressOutput(supressOutput);
+		outputFormatter.setSupressOutput(suppressOutput);
 		outputFormatter.setChrStr(chrStr);
 		outputFormatter.setUseSequenceOntology(useSequenceOntology);
 		outputFormatter.setUseOicr(useOicr);
@@ -812,21 +805,22 @@ public class SnpEffCmdEff extends SnpEff {
 		if (createSummary && (summaryFile != null)) {
 			// Creates a summary output file
 			if (verbose) Timer.showStdErr("Creating summary file: " + summaryFile);
-			if (createCsvSummary) summary(SUMMARY_CSV_TEMPLATE, summaryFile, true);
-			else summary(SUMMARY_TEMPLATE, summaryFile, false);
+			if (createCsvSummary) ok &= summary(SUMMARY_CSV_TEMPLATE, summaryFile, true);
+			else ok &= summary(SUMMARY_TEMPLATE, summaryFile, false);
 
 			// Creates genes output file
 			if (verbose) Timer.showStdErr("Creating genes file: " + summaryGenesFile);
-			summary(SUMMARY_GENES_TEMPLATE, summaryGenesFile, true);
+			ok &= summary(SUMMARY_GENES_TEMPLATE, summaryGenesFile, true);
 		}
 
 		if (totalErrs > 0) System.err.println(totalErrs + " errors.");
+		return ok;
 	}
 
 	/**
 	 * Creates a summary output file (using freeMarker and a template)
 	 */
-	void summary(String templateFile, String outputFile, boolean noCommas) {
+	boolean summary(String templateFile, String outputFile, boolean noCommas) {
 		try {
 			// Configure FreeMaker
 			Configuration cfg = new Configuration();
@@ -852,9 +846,13 @@ public class SnpEffCmdEff extends SnpEff {
 			out.close();
 		} catch (IOException e) {
 			error(e, "Error creating summary: " + e.getMessage());
+			return false;
 		} catch (TemplateException e) {
 			error(e, "Error creating summary: " + e.getMessage());
+			return false;
 		}
+
+		return true;
 	}
 
 	/**
@@ -870,12 +868,11 @@ public class SnpEffCmdEff extends SnpEff {
 		root.put("countEffects", countEffects);
 		root.put("countInputLines", countInputLines);
 		root.put("countVariants", countVariants);
-		// root.put("countVariantsFilteredOut", countVariantsFilteredOut);
 		root.put("date", String.format("%1$TY-%1$Tm-%1$Td %1$TH:%1$TM", new Date()));
 		root.put("genesFile", Gpr.baseName(summaryGenesFile, ""));
 		root.put("genome", config.getGenome());
 		root.put("genomeVersion", genomeVer);
-		// root.put("variantFilter", variantFilter);
+		root.put("variantEffectResutFilter", variantEffectResutFilter);
 		root.put("variantStats", variantStats);
 		root.put("snpEffectPredictor", config.getSnpEffectPredictor());
 		root.put("vcfStats", vcfStats);
@@ -931,4 +928,5 @@ public class SnpEffCmdEff extends SnpEff {
 
 		System.exit(-1);
 	}
+
 }

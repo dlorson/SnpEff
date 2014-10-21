@@ -3,7 +3,7 @@ package ca.mcgill.mcb.pcingola.interval.codonChange;
 import ca.mcgill.mcb.pcingola.interval.Exon;
 import ca.mcgill.mcb.pcingola.interval.Transcript;
 import ca.mcgill.mcb.pcingola.interval.Variant;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 
 /**
@@ -22,74 +22,75 @@ public class CodonChangeIns extends CodonChange {
 	 * Add changeEffect to 'changeEffect'
 	 */
 	@Override
-	boolean codonChangeSingle(Exon exon) {
-		String netChange = seqChange.netChange(transcript.isStrandMinus());
+	protected boolean codonChangeSingle(Exon exon) {
+		String netChange = variant.netChange(transcript.isStrandMinus());
 
-		codonsOld = codonsOld();
-		codonsNew = codonsNew();
+		codonsRef = codonsRef();
+		codonsAlt = codonsAlt();
+
+		EffectType effType = null;
 
 		if (netChange.length() % CodonChange.CODON_SIZE != 0) {
 			/**
 			 * Length not multiple of CODON_SIZE => FRAME_SHIFT
-			 * 	E.g. : 
+			 * 	E.g. :
 			 * 		Original:			AAA CCC GGG AAA CCC GGG AAA CCC GGG
 			 * 		Insert 'TT' pos 0:	TTA AAC CCG GGA AAC CCG GGA AAC CCG GG
 			 * 		Insert 'TT' pos 1:	ATT AAC CCG GGA AAC CCG GGA AAC CCG GG
 			 * 		Insert 'TT' pos 2:	AAT TAC CCG GGA AAC CCG GGA AAC CCG GG
 			 */
-			changeEffects.add(exon, EffectType.FRAME_SHIFT, "");
-			changeEffects.setCodons(codonsOld, codonsNew, codonNum, codonIndex);
-		} else if (codonIndex == 0) {
+			effType = EffectType.FRAME_SHIFT;
+		} else if (codonStartIndex == 0) {
 			/**
 			 * Length multiple of CODON_SIZE and insertion happens at codon boundary => CODON_INSERTION
-			 * 	E.g. : 
+			 * 	E.g. :
 			 * 		Original:			AAA CCC GGG AAA CCC GGG AAA CCC GGG
 			 * 		Insert 'TTT' pos 0:	TTT AAA CCC GGG AAA CCC GGG AAA CCC GGG
 			 */
-			changeEffects.add(exon, EffectType.CODON_INSERTION, "");
-			changeEffects.setCodons(codonsOld, codonsNew, codonNum, codonIndex);
+			effType = EffectType.CODON_INSERTION;
 		} else {
 			/**
 			 * Length multiple of CODON_SIZE and insertion does not happen at codon boundary => CODON_CHANGE_PLUS_CODON_INSERTION
-			 * 	E.g. : 
+			 * 	E.g. :
 			 * 		Original:			AAA CCC GGG AAA CCC GGG AAA CCC GGG
 			 * 		Insert 'TTT' pos 1:	ATT TAA CCC GGG AAA CCC GGG AAA CCC GGG
 			 * 		Insert 'TTT' pos 2:	AAT TTA CCC GGG AAA CCC GGG AAA CCC GGG
 			 */
-			if (codonsNew.toUpperCase().startsWith(codonsOld.toUpperCase())) {
+			if (codonsAlt.toUpperCase().startsWith(codonsRef.toUpperCase())) {
 				/**
 				 *  May be the inserted base are equal to the old ones.
 				 *  E.g.
 				 *  	Original:			AAA CCC GGG AAA CCC GGG AAA CCC GGG
 				 *  	Insert 'AAA' pos 1:	AAA AAA CCC GGG AAA CCC GGG AAA CCC GGG
 				 */
-				changeEffects.add(exon, EffectType.CODON_INSERTION, "");
-				changeEffects.setCodons(codonsOld, codonsNew, codonNum, codonIndex);
+				effType = EffectType.CODON_INSERTION;
 			} else {
-				changeEffects.add(exon, EffectType.CODON_CHANGE_PLUS_CODON_INSERTION, "");
-				changeEffects.setCodons(codonsOld, codonsNew, codonNum, codonIndex);
+				effType = EffectType.CODON_CHANGE_PLUS_CODON_INSERTION;
 			}
 		}
+
+		effect(exon, effType, "", codonsRef, codonsAlt, codonStartNum, codonStartIndex, false);
 
 		return true;
 	}
 
 	/**
-	 * Get new (modified) codons 
-	 * @return
+	 * Get new (modified) codons
 	 */
 	@Override
-	String codonsNew() {
+	public String codonsAlt() {
 		// Inserts BEFORE base:
 		//		- In positive strand that is BEFORE pos
 		//		- In negative strand, that is AFTER pos
-		int idx = codonIndex + (transcript.isStrandMinus() ? 1 : 0);
+		int idx = codonStartIndex + (transcript.isStrandMinus() ? 1 : 0);
 
 		// Insertion: Concatenate...
-		String codonsNew = codonsOld.substring(0, idx) // the first part of the codon
-				+ seqChange.netChange(transcript.isStrandMinus()) // insertion
-				+ codonsOld.substring(idx) // the last part of the codon
-		;
+		String prefix = codonsRef.length() >= idx ? codonsRef.substring(0, idx) : codonsRef; // First part of the codon
+		String netChange = variant.netChange(transcript.isStrandMinus()); // Insertion
+		String suffix = codonsRef.length() >= idx ? codonsRef.substring(idx) : ""; // last part of the codon
+
+		// New codon
+		String codonsNew = prefix + netChange + suffix;
 
 		return codonsNew;
 	}

@@ -5,9 +5,11 @@ import java.util.ArrayList;
 import java.util.Set;
 
 import ca.mcgill.mcb.pcingola.serializer.MarkerSerializer;
-import ca.mcgill.mcb.pcingola.snpEffect.VariantEffect.EffectType;
+import ca.mcgill.mcb.pcingola.snpEffect.Config;
+import ca.mcgill.mcb.pcingola.snpEffect.EffectType;
 import ca.mcgill.mcb.pcingola.snpEffect.VariantEffects;
 import ca.mcgill.mcb.pcingola.stats.ObservedOverExpectedCpG;
+import ca.mcgill.mcb.pcingola.util.Gpr;
 
 /**
  * Interval for a gene, as well as transcripts
@@ -99,23 +101,36 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 	 */
 	public Transcript canonical() {
 		Transcript canonical = null;
+		int canonicalLen = 0;
 
 		if (isProteinCoding()) {
 			// Find canonical transcript (longest CDS)
-			for (Transcript t : this)
-				if (t.isProteinCoding() && ((canonical == null) || (canonical.cds().length() < t.cds().length()))) canonical = t;
+			for (Transcript t : this) {
+				int tlen = t.cds().length();
+				if (t.isProteinCoding() && (canonicalLen < tlen)) {
+					canonical = t;
+					canonicalLen = tlen;
+				}
+			}
 		} else {
-			// Find canonical transcript (longest cDNA)
-			for (Transcript t : this)
-				if ((canonical == null) || (canonical.cds().length() < t.cds().length())) canonical = t;
+			// Find canonical transcript (longest mRNA)
+			for (Transcript t : this) {
+				int tlen = t.mRna().length();
+				if (canonicalLen < tlen) {
+					canonical = t;
+					canonicalLen = tlen;
+				}
+			}
 		}
+
+		// Found canonincal transcript? Set canonical flag
+		if (canonical != null) canonical.setCanonical(true);
 
 		return canonical;
 	}
 
 	/**
 	 * Calculate CpG bias: number of CpG / expected[CpG]
-	 * @return
 	 */
 	public double cpgExonBias() {
 		ObservedOverExpectedCpG oe = new ObservedOverExpectedCpG();
@@ -142,7 +157,6 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 
 	/**
 	 * Is any of the transcripts protein coding?
-	 * @return
 	 */
 	public boolean isProteinCoding() {
 		for (Transcript tr : this)
@@ -164,6 +178,23 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 		ArrayList<Transcript> toDelete = new ArrayList<Transcript>();
 		for (Transcript t : this)
 			if (!trIds.contains(t.getId())) toDelete.add(t);
+
+		// Remove them
+		for (Transcript t : toDelete)
+			remove(t);
+
+		return toDelete.size();
+	}
+
+	/**
+	 * Remove only protein coding transcripts
+	 * @return : Number of transcripts removed
+	 */
+	public int keepTranscriptsProtein() {
+		// Find transcripts in trIds
+		ArrayList<Transcript> toDelete = new ArrayList<Transcript>();
+		for (Transcript t : this)
+			if (!t.isProteinCoding()) toDelete.add(t);
 
 		// Remove them
 		for (Transcript t : toDelete)
@@ -202,50 +233,31 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 	}
 
 	/**
-	 * Remove unverified transcripts
+	 * Remove unverified or corrected transcripts
+	 * @return : True if ALL transcripts have been removed
 	 */
-	public void removeUnverified() {
+	public boolean removeUnverified() {
 		// Mark unchecked transcripts for deletion
 		ArrayList<Transcript> toDelete = new ArrayList<Transcript>();
+
+		int countRemoved = 0;
 		for (Transcript t : this)
-			if (!t.isChecked()) toDelete.add(t);
+			if (!t.isChecked() || t.isCorrected()) {
+				toDelete.add(t);
+				countRemoved++;
+			}
+
+		if (Config.get().isDebug()) Gpr.debug("Gene '', removing " + countRemoved + " / " + numChilds() + " unchecked transcript.");
 
 		// Remove
 		for (Transcript t : toDelete)
 			remove(t);
-	}
 
-	/**
-	 * Get some details about the effect on this gene
-	 * @param seqChange
-	 * @return
-	 */
-	@Override
-	public boolean seqChangeEffect(Variant seqChange, VariantEffects changeEffects, Variant seqChangerRef) {
-		if (!intersects(seqChange)) return false; // Sanity check
-
-		boolean hitTranscript = false;
-		for (Transcript tr : this) {
-			// Apply sequence change to create new 'reference'?
-			if (seqChangerRef != null) tr = tr.apply(seqChangerRef);
-
-			// Calculate effects
-			hitTranscript |= tr.seqChangeEffect(seqChange, changeEffects);
-		}
-
-		// May be none of the transcripts are actually hit
-		if (!hitTranscript) {
-			changeEffects.add(this, EffectType.INTRAGENIC, "");
-			return true;
-		}
-
-		return true;
+		return numChilds() <= 0;
 	}
 
 	/**
 	 * Parse a line from a serialized file
-	 * @param line
-	 * @return
 	 */
 	@Override
 	public void serializeParse(MarkerSerializer markerSerializer) {
@@ -256,7 +268,6 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 
 	/**
 	 * Create a string to serialize to a file
-	 * @return
 	 */
 	@Override
 	public String serializeSave(MarkerSerializer markerSerializer) {
@@ -271,8 +282,6 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 
 	/**
 	 * Size of a genetic region for a given gene
-	 * @param type
-	 * @return
 	 */
 	public int sizeof(String type) {
 		// Calculate size
@@ -412,6 +421,31 @@ public class Gene extends IntervalAndSubIntervals<Transcript> implements Seriali
 		}
 
 		return sb.toString();
+	}
+
+	/**
+	 * Get some details about the effect on this gene
+	 */
+	@Override
+	public boolean variantEffect(Variant variant, Variant variantrRef, VariantEffects variantEffects) {
+		if (!intersects(variant)) return false; // Sanity check
+
+		boolean hitTranscript = false;
+		for (Transcript tr : this) {
+			// Apply sequence change to create new 'reference'?
+			if (variantrRef != null) tr = tr.apply(variantrRef);
+
+			// Calculate effects
+			hitTranscript |= tr.variantEffect(variant, variantEffects);
+		}
+
+		// May be none of the transcripts are actually hit
+		if (!hitTranscript) {
+			variantEffects.addEffect(this, EffectType.INTRAGENIC, "");
+			return true;
+		}
+
+		return true;
 	}
 
 }
